@@ -1,0 +1,8 @@
+# Copy to <server-path>/.cloudflared/config-remarks.yml
+# and replace <TUNNEL_ID> with the UUID printed by `cloudflared tunnel create remarks`
+tunnel: <TUNNEL_ID>
+credentials-file: <server-path>/.cloudflared/remarks.json
+ingress:
+  - hostname: remarks.jaypokale.me
+    service: http://localhost:8013
+  - service: http_status:404

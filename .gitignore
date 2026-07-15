@@ -1,0 +1,9 @@
+# never commit taxpayer documents
+*.pdf
+!pdf.min.js
+!pdf.worker.min.js
+
+# cloudflared credentials must never be committed
+.cloudflared/
+*.pem
+config-remarks.yml

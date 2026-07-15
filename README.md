@@ -34,13 +34,10 @@ cp parawise-remarks/deploy/config-remarks.yml.template .cloudflared/config-remar
 #    then edit it: replace <TUNNEL_ID> with the UUID from step 1
 ```
 
-Run (inside tmux):
+Run (single command — starts the file server and the tunnel together):
 
 ```bash
-tmux new -s remarks
-cd <server-path>/parawise-remarks && python3 -m http.server 8013
-# Ctrl+B C for a second tmux window:
-cd <server-path> && ./cloudflared --config .cloudflared/config-remarks.yml tunnel run
+tmux new -s remarks '<server-path>/parawise-remarks/deploy/run.sh'
 ```
 
 Then open https://remarks.jaypokale.me

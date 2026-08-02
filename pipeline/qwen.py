@@ -30,6 +30,12 @@ VLM_KEY = os.environ.get("GST_VLM_KEY", "")
 
 RETRIES = 3
 
+# Thinking is off by default and has to be asked for. Left on, sarvam-105b-fp8
+# spends the whole budget reasoning - 600 tokens of it on "reply with the single
+# word OK", finish_reason "length", no answer - and a reply extraction comes back
+# as JSON cut off mid-string. GST_THINK=1 turns it back on for comparison.
+THINK_ON = os.environ.get("GST_THINK", "").lower() not in ("", "0", "false", "no")
+
 # Some models reason inline and hand back "<think>...</think>" ahead of the
 # answer, ignoring enable_thinking entirely. The reasoning is not the reply, and
 # leaving it in would let it reach a workbook cell or be counted as grounding.
@@ -91,7 +97,7 @@ def chat(system, user, max_tokens=4000):
                      {"role": "user", "content": user}],
         "max_tokens": max_tokens,
         "temperature": 0,
-        "chat_template_kwargs": {"enable_thinking": False},
+        "chat_template_kwargs": {"enable_thinking": THINK_ON},
     }
     last = None
     for attempt in range(RETRIES):

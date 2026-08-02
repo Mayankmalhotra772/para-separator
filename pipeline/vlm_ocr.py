@@ -190,7 +190,7 @@ def main():
         cases = [c for c in cases if c["gstin"] == sys.argv[1]]
 
     jobs = scanned_files(cases)
-    print(f"{len(jobs)} scanned files, {sum(j[3] for j in jobs)} pages")
+    print(f"{len(jobs)} scanned files, {sum(j[-1] for j in jobs)} pages")
 
     def one(job):
         gstin, folder, fname, subdir, npages = job

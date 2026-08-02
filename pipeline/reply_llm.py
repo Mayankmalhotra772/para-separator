@@ -44,7 +44,9 @@ OVERLAP = 50               # repeated between windows so an answer is never cut
 # defects runs to ten thousand characters. At 4000 tokens the JSON was cut off
 # mid-table, json.loads failed, and the whole document silently produced zero
 # items - 15 of 48 documents, every one of them read as "No reply".
-MAX_TOKENS = 12000
+# GST_MAX_TOKENS raises it for a model that reasons before answering: sarvam
+# spends the budget thinking and the answer is what gets cut.
+MAX_TOKENS = int(os.environ.get("GST_MAX_TOKENS", 12000))
 
 NO_REPLY = "No reply"
 

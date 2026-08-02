@@ -169,7 +169,12 @@ def verify(src, payload):
     return (not bad), bad[:6]
 
 
-MIN_GROUND = 0.55          # share of the answer's word runs that must be in the reply
+# Share of the answer's word runs that must also occur in the reply document.
+# GST_MIN_GROUND lowers it for a comparison run - a weaker model that summarises
+# rather than quotes scores under 0.55 and is refused, which is right for a
+# register that will be filed and wrong when the point of the run is to see what
+# that model actually wrote. Lowering it admits text nobody has checked.
+MIN_GROUND = float(os.environ.get("GST_MIN_GROUND", 0.55))
 SHINGLE = 5
 
 

@@ -410,6 +410,16 @@ def main():
         if not todo:
             sys.exit(f"no such case: {sys.argv[1]}")
         r = run_case(inv[todo[0]], scn[todo[0]])
+        # Kept, not just printed. Re-running one case after fixing its text is
+        # the normal repair, and dropping the result on the floor made every
+        # such run look like it had changed nothing - the workbook was still
+        # built from the stale cache underneath.
+        CACHE.mkdir(parents=True, exist_ok=True)
+        (CACHE / f"{todo[0]}.json").write_text(json.dumps(r))
+        path = WORK / "reply.json"
+        merged = json.loads(path.read_text()) if path.exists() else {}
+        merged[todo[0]] = r
+        path.write_text(json.dumps(merged, indent=1))
         for pid in sorted(r["params"]):
             rec = r["params"][pid]
             head = NO_REPLY if rec.get("no_reply") else \

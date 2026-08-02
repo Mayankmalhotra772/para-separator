@@ -29,7 +29,12 @@ from params import REPORTED
 
 NO_REPLY = "No reply"
 
-FLOOR = {"cases": 40, "notice cells": 200}
+# The floor is what this dataset reached before, not a number typed in here:
+# the check exists to catch a re-run that silently collapses, and a constant
+# tuned to the 42-case corpus simply fails every smaller folder. The best run so
+# far is remembered per work directory; a first run has nothing to fall short of.
+TOLERANCE = 0.9
+HIGH_WATER = WORK / "coverage.json"
 
 fails = []
 
@@ -127,12 +132,27 @@ def main():
         check("scanned-page figures seen by tesseract too", not mismatch,
               f"{len(mismatch)}: {mismatch[:4]}")
 
-    # --- coverage floors
-    check("case floor", len(scn) >= FLOOR["cases"],
-          f"{len(scn)} >= {FLOOR['cases']}")
+    # --- coverage floors, against this dataset's own best run
     ncells = sum(len(c["params"]) for c in scn.values())
-    check("notice cell floor", ncells >= FLOOR["notice cells"],
-          f"{ncells} >= {FLOOR['notice cells']}")
+    now = {"cases": len(scn), "notice cells": ncells}
+    best = {}
+    if HIGH_WATER.exists():
+        try:
+            best = json.loads(HIGH_WATER.read_text())
+        except json.JSONDecodeError:
+            best = {}
+
+    for k, v in now.items():
+        floor = int(TOLERANCE * best.get(k, 0))
+        check(f"{k} floor", v >= floor,
+              f"{v} >= {floor}" + (f"  (best {best[k]})" if k in best
+                                   else "  (first run, nothing to compare)"))
+
+    # Only a clean run sets the mark, or a broken one lowers the bar for the
+    # next.
+    if not fails:
+        HIGH_WATER.write_text(json.dumps(
+            {k: max(v, best.get(k, 0)) for k, v in now.items()}, indent=1))
 
     print()
     if fails:

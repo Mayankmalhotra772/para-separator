@@ -24,7 +24,17 @@ from pathlib import Path
 
 from paths import DATA, WORK, ROLES, text_path
 
-MIN_CHARS_PER_PAGE = 100     # below this the page carried no text layer
+# Below this a PDF is treated as a scan and re-read by OCR. 100 was too low: a
+# ten-page reply came through at 251 characters a page and passed, because the
+# covering letter has a text layer and the letter behind it is a photograph. The
+# model was handed "Summary of documents attached: 1. Reply Letter, 2. Ann. 1 -
+# Notice..." and correctly found no argument in it, so the case read "No reply"
+# against a reply that was there all along.
+#
+# 600 sits inside a wide gap measured across all 49 reply files in this corpus:
+# the two mixed documents come in at 251 and 302 characters a page, and the next
+# file up is at 1206. Nothing legitimate is between them.
+MIN_CHARS_PER_PAGE = int(os.environ.get("GST_MIN_CHARS_PAGE", 600))
 MAX_CONTROL = 0.02           # above this the text layer is unreadable
 WORKERS = int(os.environ.get("GST_OCR_WORKERS", 8))
 

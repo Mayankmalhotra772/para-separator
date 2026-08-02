@@ -36,6 +36,14 @@ RETRIES = 3
 # as JSON cut off mid-string. GST_THINK=1 turns it back on for comparison.
 THINK_ON = os.environ.get("GST_THINK", "").lower() not in ("", "0", "false", "no")
 
+# GST_JSON_MODE asks the server to constrain decoding to valid JSON. Off by
+# default because Qwen already returns valid JSON and there is no reason to
+# change a working path. It is what makes sarvam-105b-fp8 usable at all: left to
+# itself it closes an array with a quote, leaks </arg_value> into the object, or
+# never closes the outer brace, and a document it had read correctly parses to
+# nothing. With it, the same call returns 7-8 items instead of 0-4.
+JSON_MODE = os.environ.get("GST_JSON_MODE", "").lower() not in ("", "0", "false", "no")
+
 # Some models reason inline and hand back "<think>...</think>" ahead of the
 # answer, ignoring enable_thinking entirely. The reasoning is not the reply, and
 # leaving it in would let it reach a workbook cell or be counted as grounding.
@@ -99,6 +107,8 @@ def chat(system, user, max_tokens=4000):
         "temperature": 0,
         "chat_template_kwargs": {"enable_thinking": THINK_ON},
     }
+    if JSON_MODE:
+        payload["response_format"] = {"type": "json_object"}
     last = None
     for attempt in range(RETRIES):
         try:

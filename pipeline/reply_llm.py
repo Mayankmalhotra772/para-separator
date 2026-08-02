@@ -214,8 +214,13 @@ def salvage(raw):
     by half of a fourth. Scanning for balanced braces recovers the three
     instead of discarding all of them, which is what a failed json.loads on the
     whole document used to do.
+
+    Every closed object is tried, not only the outermost one. The reply arrives
+    as {"items": [ ... ]}, so when the cut lands inside the array the outer
+    brace never closes and a depth-0-only scan recovers nothing at all - which
+    is the one case this function exists for.
     """
-    items, depth, start, instr, esc = [], 0, None, False, False
+    items, starts, instr, esc = [], [], False, False
     for i, ch in enumerate(raw):
         if instr:
             if esc:
@@ -228,21 +233,30 @@ def salvage(raw):
         if ch == '"':
             instr = True
         elif ch == "{":
-            if depth == 0:
-                start = i
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0 and start is not None:
+            starts.append(i)
+        elif ch == "}" and starts:
+            chunk = raw[starts.pop():i + 1]
+            for candidate in (chunk, relax(chunk)):
                 try:
-                    obj = json.loads(raw[start:i + 1], strict=False)
+                    obj = json.loads(candidate, strict=False)
                 except json.JSONDecodeError:
-                    pass
-                else:
-                    if isinstance(obj, dict) and "id" in obj:
-                        items.append(obj)
-                start = None
+                    continue
+                if isinstance(obj, dict) and "id" in obj:
+                    items.append(obj)
+                break
     return items
+
+
+# A comma before the closing brace is invalid JSON and entirely normal model
+# output: sarvam-105b-fp8 ends every item "text": "...",\n  }, and json.loads
+# then rejects the whole response, which read as the model having found nothing
+# in three documents that it had in fact read correctly. Only commas outside
+# string literals are removed, so a comma inside a reply's text survives.
+TRAILING_COMMA = re.compile(r'("(?:[^"\\]|\\.)*")|,\s*([}\]])', re.S)
+
+
+def relax(text):
+    return TRAILING_COMMA.sub(lambda m: m.group(1) or m.group(2), text)
 
 
 def parse(raw, allowed, nlines):
@@ -250,12 +264,14 @@ def parse(raw, allowed, nlines):
     m = re.search(r"\{.*\}", raw, re.S)
     obj = None
     if m:
-        try:
-            # strict=False: some models emit literal newlines inside JSON
-            # strings, which is invalid JSON but perfectly readable text.
-            obj = json.loads(m.group(0), strict=False)
-        except json.JSONDecodeError:
-            obj = None
+        for candidate in (m.group(0), relax(m.group(0))):
+            try:
+                # strict=False: some models emit literal newlines inside JSON
+                # strings, which is invalid JSON but perfectly readable text.
+                obj = json.loads(candidate, strict=False)
+                break
+            except json.JSONDecodeError:
+                obj = None
     items = obj.get("items", []) if isinstance(obj, dict) else salvage(raw)
     if obj is None and items:
         print(f"    ~ salvaged {len(items)} item(s) from a truncated reply",

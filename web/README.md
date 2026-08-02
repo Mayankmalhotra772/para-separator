@@ -65,9 +65,14 @@ To stop the rebuild running automatically, drop the `rebuildCells()` /
 
 ## Model server
 
-The page calls an OpenAI-compatible endpoint (vLLM), default
-`https://api.jaypokale.me/v1` with `Qwen/Qwen3.6-27B-FP8`. Endpoint and model can
-be changed under **Model server settings**.
+The page calls an OpenAI-compatible endpoint (vLLM) with
+`Qwen/Qwen3.6-27B-FP8`. Endpoint and model are set under **Model server
+settings** and kept in `localStorage`.
+
+Host names, addresses, usernames and absolute server paths appear here as
+placeholders — `<api-host>`, `<app-host>`, `<login-node>`, `<gpu-node>`,
+`<user>`, `<workdir>`, `<server-path>` — because this repository is public.
+Substitute your own.
 
 Sign-in asks for a username, a password and the **API key**. The username and
 password (`admin` / `DEMO_2026`) are a curtain only — the page is static, so they
@@ -167,9 +172,9 @@ One tmux session, one window per process:
 | window | what |
 |---|---|
 | `web` | static file server for this repo on 8013 |
-| `web-tunnel` | cloudflared → `remarks.jaypokale.me` |
+| `web-tunnel` | cloudflared → `<app-host>` |
 | `vllm` | Qwen3.6-27B-FP8 on 8033 — splits orders *and* does the OCR |
-| `api-tunnel` | cloudflared → `api.jaypokale.me` |
+| `api-tunnel` | cloudflared → `<api-host>` |
 
 ```bash
 ssh -i /path/to/ssh_key <user>@<login-node>   # lands on <login-node>
@@ -191,7 +196,7 @@ The checked-in `config-remarks.yml` points at the *other* server's
 tunnel id from the credentials file rather than trusting a hand-edited config.
 
 **The remarks tunnel id is shared with the iit-hyderabad deployment.** Running
-both connectors at once makes Cloudflare split `remarks.jaypokale.me` between the
+both connectors at once makes Cloudflare split `<app-host>` between the
 two hosts and visitors land on whichever answers. Stop the tunnel on one before
 starting it on the other.
 
@@ -205,7 +210,7 @@ rsync -av --delete -e "ssh -i /path/to/ssh_key" --exclude .git --exclude .DS_Sto
 Run that **from the Mac** — the paths are Mac paths, so it fails from inside the
 server with "Identity file not accessible".
 
-## Deploy on remarks.jaypokale.me (cloudflared, iit-hyderabad)
+## Deploy on <app-host> (cloudflared, iit-hyderabad)
 
 One-time setup on the server, from `<server-path>`:
 
@@ -216,7 +221,7 @@ TUNNEL_ORIGIN_CERT=$PWD/.cloudflared/cert.pem ./cloudflared tunnel create remark
 mv ~/.cloudflared/<TUNNEL_ID>.json .cloudflared/remarks.json
 
 # 2. point the DNS record at the tunnel
-TUNNEL_ORIGIN_CERT=$PWD/.cloudflared/cert.pem ./cloudflared tunnel route dns remarks remarks.jaypokale.me
+TUNNEL_ORIGIN_CERT=$PWD/.cloudflared/cert.pem ./cloudflared tunnel route dns remarks <app-host>
 
 # 3. write the config
 cp parawise-remarks/deploy/config-remarks.yml.template .cloudflared/config-remarks.yml
@@ -229,4 +234,4 @@ Run (single command — starts the file server and the tunnel together):
 tmux new -s remarks '<server-path>/parawise-remarks/deploy/run.sh'
 ```
 
-Then open https://remarks.jaypokale.me
+Then open https://<app-host>

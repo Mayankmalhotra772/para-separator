@@ -1,7 +1,12 @@
 # GSTR-9 Scrutiny Register — file-by-file reference
 
-Deployed at `~/<workdir>/para-separator-demo/` on `<login-node>`
-(`<login-node>`).
+Deployed at `~/<workdir>/para-separator-demo/` on the cluster login node.
+
+Host names, addresses, usernames and absolute server paths are written here as
+placeholders — `<login-node>`, `<gpu-node>`, `<user>`, `<home>`, `<workdir>`,
+`<api-host>` — because this repository is public. Substitute the real values for
+your own deployment; nothing in the code depends on them, every one is supplied
+by an environment variable or a command-line argument.
 
 The system reads a folder of GST case files and produces one Excel workbook with
 21 sheets — one per scrutiny parameter — where each row is one company showing

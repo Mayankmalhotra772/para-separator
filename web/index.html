@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Para-wise Remarks Register — GST Order Analyser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="pdf.min.js"></script>
+<script>
+  window.__pdfjs_local = !!window.pdfjsLib;
+  if (!window.pdfjsLib) {
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>');
+  }
+</script>
+<style>
+  :root{
+    /* the statement is a wide 4-column table - let it use the screen. Capped so it
+       does not sprawl on an ultrawide monitor; raise or drop the cap freely. */
+    --page:2000px;
+    --paper:#f5efe1;
+    --paper-deep:#efe7d3;
+    --ink:#22303c;
+    --ink-soft:#4c5a66;
+    --rule:#d9cfb4;
+    --rule-dark:#b8ab88;
+    --seal:#a63c2c;
+    --stamp-green:#2e6b4f;
+    --stamp-grey:#6b6b5f;
+    --gold:#8a6d2f;
+    --card:#faf6ec;
+    --shadow:0 1px 2px rgba(34,48,60,.08),0 8px 24px -12px rgba(34,48,60,.25);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Spectral',Georgia,serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.55;
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0 31px, rgba(184,171,136,.13) 31px 32px),
+      radial-gradient(1200px 600px at 80% -10%, rgba(138,109,47,.07), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(166,60,44,.05), transparent 60%);
+    min-height:100vh;
+  }
+  body::after{ /* paper grain */
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:999;opacity:.35;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.05'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ============ sign-in gate ============ */
+  #gate{
+    position:fixed;inset:0;z-index:2000;background:var(--paper);
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  #gate.hidden{display:none}
+  #gateform{
+    width:100%;max-width:390px;background:var(--card);border:1.5px solid var(--rule-dark);
+    box-shadow:var(--shadow);padding:38px 34px 32px;text-align:center;animation:rise .45s ease both;
+  }
+  #gateform .glyph{font-family:'Fraunces',serif;font-size:44px;font-weight:900;color:var(--seal);line-height:1}
+  #gateform h2{font-family:'Fraunces',serif;font-weight:700;font-size:21px;margin:10px 0 4px}
+  #gateform > p{color:var(--ink-soft);font-size:14px;margin-bottom:24px}
+  #gateform label{
+    display:block;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 4px;
+  }
+  #gateform input{
+    width:100%;font-family:'IBM Plex Mono',monospace;font-size:13.5px;padding:9px 11px;margin-bottom:16px;
+    border:1.5px solid var(--rule-dark);background:var(--paper);color:var(--ink);border-radius:2px;
+  }
+  #gateform input:focus{outline:none;border-color:var(--seal)}
+  #gateform .btn{width:100%;padding:10px}
+  #gateform .gate-err{
+    display:none;margin-top:14px;color:var(--seal);font-size:13px;
+  }
+  #gateform.bad .gate-err{display:block}
+  #gateform .keyhint{
+    margin-top:18px;font-size:12px;color:var(--ink-soft);line-height:1.5;text-align:left;
+    border-top:1px solid var(--rule);padding-top:12px;
+  }
+  #gate-go[disabled]{opacity:.6;cursor:default}
+  #gateform.bad{animation:shake .3s}
+  @keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+  /* ============ masthead ============ */
+  .masthead{
+    max-width:var(--page);margin:0 auto;padding:34px 28px 18px;
+    display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    border-bottom:3px double var(--rule-dark);
+  }
+  .masthead .brand h1{
+    font-family:'Fraunces',serif;font-weight:900;font-size:clamp(26px,3.6vw,44px);
+    letter-spacing:.01em;line-height:1.02;color:var(--ink);
+  }
+  .masthead .brand h1 em{font-style:normal;color:var(--seal)}
+  .masthead .brand p{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-soft);margin-top:8px;
+  }
+  .filetag{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    border:1.5px solid var(--rule-dark);padding:8px 14px;color:var(--ink-soft);
+    background:var(--card);position:relative;box-shadow:var(--shadow);
+    transform:rotate(1.2deg);
+  }
+  .filetag::before{content:"";position:absolute;left:-6px;top:50%;width:10px;height:10px;border-radius:50%;
+    background:var(--paper);border:1.5px solid var(--rule-dark);transform:translateY(-50%)}
+  .filetag b{color:var(--seal)}
+
+  main{max-width:var(--page);margin:0 auto;padding:26px 28px 90px}
+
+  /* ============ dropzone ============ */
+  #dropzone{
+    margin:44px auto 0;max-width:760px;background:var(--card);
+    border:2px dashed var(--rule-dark);padding:64px 40px 52px;text-align:center;cursor:pointer;
+    position:relative;box-shadow:var(--shadow);transition:border-color .2s, transform .2s, box-shadow .2s;
+    animation:rise .5s ease both;
+  }
+  #dropzone:hover,#dropzone:focus-visible{border-color:var(--seal);transform:translateY(-2px);
+    box-shadow:0 2px 3px rgba(34,48,60,.08),0 16px 34px -14px rgba(34,48,60,.3);outline:none}
+  #dropzone.dragover{border-color:var(--seal);background:#fbf3e6}
+  #dropzone .glyph{
+    font-family:'Fraunces',serif;font-size:54px;font-weight:900;color:var(--seal);
+    line-height:1;margin-bottom:14px;
+  }
+  #dropzone h2{font-family:'Fraunces',serif;font-weight:700;font-size:24px;margin-bottom:8px}
+  #dropzone p{color:var(--ink-soft);font-size:15px;max-width:460px;margin:0 auto}
+  #dropzone .privacy{
+    margin-top:26px;display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--stamp-green);
+    border:1px solid var(--stamp-green);padding:5px 12px;border-radius:2px;
+  }
+  #dropzone .corner{position:absolute;width:18px;height:18px;border:2.5px solid var(--seal);opacity:.65}
+  #dropzone .corner.tl{top:10px;left:10px;border-right:none;border-bottom:none}
+  #dropzone .corner.tr{top:10px;right:10px;border-left:none;border-bottom:none}
+  #dropzone .corner.bl{bottom:10px;left:10px;border-right:none;border-top:none}
+  #dropzone .corner.br{bottom:10px;right:10px;border-left:none;border-top:none}
+  #fileinput{display:none}
+
+  #progress{display:none;margin:30px auto 0;max-width:760px;text-align:center;
+    font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft)}
+  #progress .bar{height:6px;background:var(--rule);margin-top:12px;overflow:hidden}
+  #progress .bar i{display:block;height:100%;width:0;background:var(--seal);transition:width .25s}
+
+  #errorbox{display:none;margin:30px auto 0;max-width:760px;background:#fdf0ec;border:1.5px solid var(--seal);
+    padding:22px 26px;box-shadow:var(--shadow)}
+  #errorbox h3{font-family:'Fraunces',serif;color:var(--seal);margin-bottom:6px}
+  #errorbox p{font-size:14.5px;color:var(--ink-soft)}
+
+  /* ============ toolbar ============ */
+  #toolbar{
+    display:none;position:sticky;top:0;z-index:50;
+    background:rgba(245,239,225,.92);backdrop-filter:blur(6px);
+    border-bottom:1.5px solid var(--rule-dark);
+    margin:0 -28px 26px;padding:12px 28px;
+  }
+  #toolbar .inner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;max-width:var(--page);margin:0 auto}
+  #toolbar .docname{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);
+    max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #toolbar .count{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--seal);font-weight:600}
+  #toolbar .spacer{flex:1}
+  .btn{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--ink);color:var(--paper);border:1.5px solid var(--ink);padding:8px 16px;cursor:pointer;
+    transition:background .15s,color .15s;border-radius:2px;
+  }
+  .btn:hover{background:var(--seal);border-color:var(--seal);color:#fff}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule-dark)}
+  .btn.ghost:hover{border-color:var(--seal);color:var(--seal);background:transparent}
+
+  /* ============ cards ============ */
+  #results{display:none}
+  .card{
+    background:var(--card);border:1.5px solid var(--rule-dark);box-shadow:var(--shadow);
+    padding:26px 30px 22px;margin-bottom:34px;position:relative;animation:rise .45s ease both;
+  }
+  .card::before{
+    content:attr(data-label);position:absolute;top:-11px;left:22px;background:var(--card);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--gold);
+    padding:2px 10px;border:1px solid var(--rule-dark);z-index:2;
+  }
+  .metagrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px 30px}
+  .metagrid .field label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px;
+  }
+  .metagrid .field div{font-size:15.5px;font-weight:500}
+  .metagrid .field div[contenteditable]:focus{outline:1.5px dashed var(--seal);outline-offset:3px}
+  .card details{margin-top:18px;border-top:1px solid var(--rule);padding-top:12px}
+  .card summary{cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+  .card summary:hover{color:var(--seal)}
+  .card details pre{white-space:pre-wrap;font-family:'Spectral',serif;font-size:14px;
+    color:var(--ink-soft);margin-top:10px;max-height:300px;overflow:auto;padding-right:10px}
+
+  /* ============ the defect table ============ */
+  .card.tablecard{padding:0}
+  .tablewrap{overflow-x:auto}
+  #defecttable{width:100%;border-collapse:collapse}
+  #defecttable thead th{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+    text-align:left;padding:16px 18px 12px;border-bottom:2px solid var(--ink);
+    background:var(--paper-deep);white-space:nowrap;
+  }
+  #defecttable thead th .dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+    margin-right:8px;vertical-align:1px}
+  /* the figure tables are made to fit their column rather than scroll, so the notice
+     column no longer needs extra room - the space goes to the two prose columns */
+  #defecttable thead th.h-no{width:8%;color:var(--ink-soft)}
+  #defecttable thead th.h-defect{width:26%;color:var(--seal)} .h-defect .dot{background:var(--seal)}
+  #defecttable thead th.h-reply{width:33%;color:var(--gold)} .h-reply .dot{background:var(--gold)}
+  #defecttable thead th.h-concl{width:33%;color:var(--stamp-green)} .h-concl .dot{background:var(--stamp-green)}
+  #defecttable tbody td{
+    border-top:1.5px solid var(--rule);vertical-align:top;padding:16px 18px 20px;
+  }
+  #defecttable tbody td + td{border-left:1.5px solid var(--rule)}
+  #defecttable tbody tr:nth-child(even) td{background:rgba(239,231,211,.35)}
+
+  td.defect-info{background:var(--paper-deep)}
+  .defect-no{
+    font-family:'Fraunces',serif;font-weight:900;font-size:13px;letter-spacing:.06em;
+    background:var(--ink);color:var(--paper);padding:5px 10px;display:inline-block;white-space:nowrap;
+  }
+  .defect-title{
+    font-family:'Fraunces',serif;font-weight:700;font-size:15.5px;line-height:1.3;margin:10px 0 12px;
+  }
+  .defect-title[contenteditable]:focus{outline:1.5px dashed var(--seal);outline-offset:3px}
+  .stamp{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;padding:5px 11px;border:2.5px solid currentColor;
+    border-radius:3px;transform:rotate(-3deg);opacity:.9;white-space:nowrap;user-select:none;
+    box-shadow:inset 0 0 6px rgba(0,0,0,.06);cursor:pointer;
+  }
+  .stamp:hover{opacity:1;transform:rotate(0deg)}
+  [contenteditable]{cursor:text}
+  [contenteditable]:hover{outline:1.5px dashed var(--rule-dark);outline-offset:3px}
+  .stamp.confirmed{color:var(--seal)}
+  .stamp.dropped,.stamp.accepted{color:var(--stamp-green)}
+  .stamp.partly{color:var(--gold)}
+  .stamp.review{color:var(--stamp-grey)}
+
+  /* ============ model settings ============ */
+  #settings{
+    margin:26px auto 0;max-width:760px;background:var(--card);border:1.5px solid var(--rule-dark);
+    padding:18px 24px 20px;box-shadow:var(--shadow);
+  }
+  #settings summary{cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+  #settings summary:hover{color:var(--seal)}
+  #settings .row{display:grid;grid-template-columns:110px 1fr;gap:10px 14px;align-items:center;margin-top:16px}
+  #settings label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--ink-soft)}
+  #settings input{
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:7px 10px;
+    border:1.5px solid var(--rule-dark);background:var(--paper);color:var(--ink);border-radius:2px;width:100%;
+  }
+  #settings input:focus{outline:none;border-color:var(--seal)}
+  #settings .hint{grid-column:1/-1;font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+  #settings .hint b{color:var(--seal)}
+  .keywarn{
+    display:none;margin:18px auto 0;max-width:760px;background:#fdf0ec;border:1.5px solid var(--seal);
+    padding:14px 20px;font-size:14px;color:var(--ink-soft);box-shadow:var(--shadow);
+  }
+  .del{
+    display:block;margin-top:14px;background:none;border:none;cursor:pointer;
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--rule-dark);text-decoration:underline;padding:0;
+  }
+  .del:hover{color:var(--seal)}
+
+  .col-body{
+    font-size:14px;white-space:pre-wrap;word-break:break-word;color:var(--ink);
+    min-height:60px;max-height:460px;overflow-y:auto;padding-right:6px;
+  }
+  .col-body:focus{outline:1.5px dashed var(--seal);outline-offset:4px}
+  .col-body.empty{color:var(--stamp-grey);font-style:italic}
+  .col-body::-webkit-scrollbar{width:8px}
+  .col-body::-webkit-scrollbar-thumb{background:var(--rule-dark);border-radius:4px}
+
+  /* rebuilt cells: real tables instead of space-aligned text */
+  /* The table fits its column instead of scrolling: table-layout:fixed is what
+     enforces that, and pinning the figure columns narrow stops the description
+     being squeezed to an equal share. */
+  .col-body .tidywrap{max-width:100%;margin:9px 0}
+  .col-body .tidytab{
+    border-collapse:collapse;width:100%;table-layout:fixed;
+    font-size:10.5px;white-space:normal;
+  }
+  .col-body .tidytab th,.col-body .tidytab td{
+    border:1px solid var(--rule-dark);padding:4px 5px;vertical-align:top;text-align:left;
+    overflow-wrap:break-word;
+  }
+  /* figure column widths are set per table by <colgroup>, from the longest value */
+  .col-body .tidytab td.num{font-size:9.5px}
+  .col-body .tidytab th{white-space:normal;font-size:9px;letter-spacing:0}
+  /* 7+ figure columns genuinely do not fit this column - that one scrolls */
+  .col-body .tidywrap.wide{overflow-x:auto}
+  .col-body .tidywrap.wide::-webkit-scrollbar{height:7px}
+  .col-body .tidywrap.wide::-webkit-scrollbar-thumb{background:var(--rule-dark);border-radius:4px}
+  .col-body .tidytab.wide{width:max-content;min-width:100%;table-layout:auto;font-size:9.5px}
+  .col-body .tidytab.wide th{font-size:8px;white-space:nowrap}
+  .col-body .tidytab.wide th,.col-body .tidytab.wide td{padding:3px 5px}
+  .col-body .tidytab.wide td:not(.num){min-width:105px;max-width:170px}
+  .col-body .tidytab th{
+    background:var(--paper-deep);font-family:'IBM Plex Mono',monospace;font-size:9.5px;
+    text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);text-align:left;
+  }
+  .col-body .tidytab th.num{text-align:right}
+  /* figures: never wrap mid-number — "176634971" split as "1766349 71" is unreadable */
+  .col-body .tidytab td.num{
+    text-align:right;white-space:nowrap;overflow-wrap:normal;word-break:keep-all;
+    font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;
+  }
+  .col-body p{margin:0 0 8px;white-space:normal}
+  /* keep a rebuilt cell inside its column no matter what the model returns */
+  #defecttable{table-layout:fixed}
+  /* A cell being rebuilt is blurred so the half-formed version is never read. The
+     spinner has to live on the PARENT: filter:blur() blurs every descendant, so a
+     spinner inside the blurred element would be blurred along with it. */
+  .working{filter:blur(3px);opacity:.5;pointer-events:none;user-select:none;
+    transition:filter .25s ease,opacity .25s ease}
+  .loading{position:relative}
+  .loading::after{
+    content:"";position:absolute;top:50%;left:50%;width:26px;height:26px;margin:-13px 0 0 -13px;
+    border:2.5px solid var(--rule);border-top-color:var(--seal);border-radius:50%;
+    animation:spin .75s linear infinite;z-index:5;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .sumtidy .tidywrap{overflow-x:auto;max-width:100%}
+  .sumtidy table{border-collapse:collapse;width:max-content;min-width:100%;font-size:12.5px}
+  .sumtidy th,.sumtidy td{border:1px solid var(--rule-dark);padding:6px 10px;text-align:left}
+  .sumtidy th{background:var(--paper-deep);font-family:'IBM Plex Mono',monospace;font-size:10px;
+    text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);white-space:nowrap}
+  .sumtidy td.num,.sumtidy th.num{text-align:right;white-space:nowrap;
+    font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+  .sumtidy p{margin:0 0 8px}
+  /* proposed vs confirmed, side by side - the comparison is the point */
+  .demandpair{display:grid;grid-template-columns:1fr 1fr;gap:22px 30px}
+  @media (max-width:900px){ .demandpair{grid-template-columns:1fr} }
+  .demandbox h4{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--ink-soft);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--rule);
+  }
+  .demandbox:last-child h4{color:var(--stamp-green)}
+  .demandnone{font-size:14px;color:var(--ink-soft);font-style:italic;line-height:1.5}
+
+  /* ============ summary ============ */
+  table.sumtab{width:100%;border-collapse:collapse;font-size:14.5px}
+  table.sumtab th,table.sumtab td{border:1px solid var(--rule-dark);padding:8px 14px;text-align:right;
+    font-family:'IBM Plex Mono',monospace;font-size:13px}
+  table.sumtab th{font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:11px;
+    letter-spacing:.1em;background:var(--paper-deep);color:var(--ink-soft)}
+  table.sumtab td:first-child,table.sumtab th:first-child{text-align:left;font-family:'Spectral',serif;
+    font-size:14.5px;font-weight:600}
+  table.sumtab tr:last-child td{background:var(--paper-deep);font-weight:600;color:var(--seal)}
+  .card pre.sumraw{white-space:pre-wrap;font-family:'Spectral',serif;font-size:14px;color:var(--ink-soft)}
+
+  .notice{background:#fbf4de;border:1.5px solid var(--gold);padding:16px 22px;margin-bottom:30px;
+    font-size:14.5px;color:var(--ink-soft);box-shadow:var(--shadow)}
+  .notice b{color:var(--gold)}
+
+
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  @media (max-width:900px){
+    #defecttable{min-width:860px}
+  }
+
+  /* ============ print ============ */
+  @media print{
+    body{background:#fff}
+    body::after,#gate,.masthead,#toolbar,#dropzone,#settings,.keywarn,#progress,#errorbox,.del,.notice{display:none !important}
+    main{max-width:none;padding:0}
+    .card{box-shadow:none;border-color:#999;animation:none}
+    .card:not(.tablecard){break-inside:avoid}
+    .col-body{max-height:none;overflow:visible;font-size:11px}
+    #defecttable thead{display:table-header-group}
+    #defecttable tbody td{padding:8px 10px}
+    .stamp{transform:none}
+    /* The printed page is ~700px wide, which trips the max-width:900px rule below
+       and forces the table to 860px; .tablewrap then CLIPS the overflow, cutting
+       the officer's finding column off the paper. Undo both for print. */
+    .tablewrap{overflow:visible !important}
+    #defecttable{min-width:0 !important;width:100%;table-layout:fixed}
+    /* direct children only - this must not cascade into the rebuilt tables, where
+       it chops "TOTAL" into one letter per line */
+    #defecttable > thead > tr > th,#defecttable > tbody > tr > td{
+      overflow-wrap:break-word;word-break:normal;
+    }
+    /* A rebuilt table scrolls sideways on screen. Paper cannot scroll, so the
+       overflow was being clipped and the description and TOTAL columns fell off
+       the sheet. On paper the table has to fit the column instead. */
+    .col-body .tidywrap,.sumtidy .tidywrap{overflow:visible !important;max-width:none !important}
+    .col-body .tidytab,.sumtidy table{
+      /* fixed layout is what guarantees the table cannot exceed the column; auto
+         lets nowrap figures push it over the page. Figure columns are pinned narrow
+         so the description keeps the remaining width instead of an equal share. */
+      width:100% !important;min-width:0 !important;table-layout:fixed;font-size:8.5px;
+    }
+    /* narrow tables carry their own <colgroup> widths; only the wide ones,
+       which have none, need a rule here */
+    .col-body .tidytab th,.sumtidy th{
+      white-space:nowrap;overflow-wrap:normal;word-break:normal;
+      font-size:7px;letter-spacing:0;
+    }
+    .col-body .tidytab td.num,.sumtidy td.num{font-size:8px;letter-spacing:-.2px}
+    /* 7+ columns: pinning figures at 15% would leave the description almost nothing,
+       so everything shrinks and the headers are allowed to wrap */
+    .col-body .tidytab.wide,.sumtidy table.wide{font-size:7px}
+    .col-body .tidytab.wide th.num,.sumtidy table.wide th.num{width:10%}
+    /* figures stay on one line - a split "740086" is unreadable */
+    .col-body .tidytab.wide td.num,.sumtidy table.wide td.num{font-size:6.5px}
+    /* wrap header labels at natural breaks only: overflow-wrap:anywhere shatters
+       "COMMODITY/SERVICE" into one letter per line in these narrow columns */
+    .col-body .tidytab.wide th,.sumtidy table.wide th{
+      font-size:5.5px;overflow-wrap:normal;word-break:normal;
+      white-space:normal !important;   /* beats the nowrap set for narrow tables */
+    }
+    .col-body .tidytab.wide th,.col-body .tidytab.wide td{padding:2px 3px}
+    .col-body .tidytab th,.col-body .tidytab td,.sumtidy th,.sumtidy td{padding:3px 4px}
+    .col-body .tidytab td:not(.num),.sumtidy td:not(.num){
+      min-width:0 !important;max-width:none !important;
+    }
+    /* keep a figure on one line, but let it break rather than run off the page */
+    .col-body .tidytab td.num,.sumtidy td.num{overflow-wrap:anywhere}
+    .col-body .tidytab tr,.sumtidy tr{break-inside:avoid}
+    .col-body .tidytab thead,.sumtidy thead{display:table-header-group}
+    .loading::after{display:none !important}
+    .working{filter:none !important;opacity:1 !important}
+    /* four text columns need the long edge of the sheet */
+    @page{margin:10mm;size:A4 landscape}
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <form id="gateform" autocomplete="on">
+    <div class="glyph">&sect;</div>
+    <h2>Para-wise Remarks Register</h2>
+    <p>Sign in to open the register.</p>
+    <label for="gate-user">Username</label>
+    <input id="gate-user" name="username" autocomplete="username" spellcheck="false" autofocus>
+    <label for="gate-pass">Password</label>
+    <input id="gate-pass" name="password" type="password" autocomplete="current-password">
+    <label for="gate-key">API key</label>
+    <input id="gate-key" name="apikey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+    <button class="btn" type="submit" id="gate-go">Sign in</button>
+    <p class="gate-err" id="gate-err">Wrong username or password.</p>
+    <p class="keyhint">The key is checked against the model server and kept in this browser only.
+      It is not stored in this page, so each person signs in with their own.</p>
+  </form>
+</div>
+
+<header class="masthead">
+  <div class="brand">
+    <h1>Para-wise <em>Remarks</em> Register</h1>
+    <p>GST DRC-07 Order &mdash; Notice / Reply / Finding Separator</p>
+  </div>
+  <div class="filetag">Form &mdash; <b>3-Column</b> Remarks Statement</div>
+</header>
+
+<main>
+  <div id="dropzone" tabindex="0" role="button" aria-label="Upload PDF order">
+    <span class="corner tl"></span><span class="corner tr"></span>
+    <span class="corner bl"></span><span class="corner br"></span>
+    <div class="glyph">&sect;</div>
+    <h2>Upload the Assessment Order (PDF)</h2>
+    <p>Drop the signed DRC-07 order here, or click to browse. Each issue becomes one row of a
+       three-column table &mdash; <b>Notice</b>, <b>Taxpayer Reply</b>, <b>Officer&rsquo;s Finding</b>
+       &mdash; with the case details on top.</p>
+    <span class="privacy">&#9679; Text is sent to your own model server for splitting</span>
+  </div>
+  <input type="file" id="fileinput" accept="application/pdf,.pdf">
+
+  <details id="settings">
+    <summary>Model server settings</summary>
+    <div class="row">
+      <label for="in-url">Endpoint</label><input id="in-url" spellcheck="false" placeholder="https://api.jaypokale.me/v1">
+      <label for="in-key">API key</label><input id="in-key" type="password" spellcheck="false" placeholder="sk-…">
+      <label for="in-model">Model</label><input id="in-model" spellcheck="false" placeholder="Qwen/Qwen3.6-27B-FP8">
+      <p class="hint">The key entered at sign-in is kept in this browser (<code>localStorage</code>)
+        and can be replaced here. It is never stored in this page. The order&rsquo;s text is sent to
+        the endpoint above, so point it at a server you control.</p>
+    </div>
+  </details>
+
+  <div class="keywarn" id="keywarn">
+    <b>No API key set.</b> Open <b>Model server settings</b> above and paste your key before uploading an order.
+  </div>
+
+  <div id="progress"><span id="progresstext">Reading&hellip;</span><div class="bar"><i id="progressbar"></i></div></div>
+
+  <div id="errorbox"><h3 id="errortitle">Could not read this file</h3><p id="errormsg"></p></div>
+
+  <div id="toolbar"><div class="inner">
+    <span class="docname" id="docname"></span>
+    <span class="count" id="defectcount"></span>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="btn-add">+ Add issue</button>
+    <button class="btn ghost" id="btn-new">New upload</button>
+    <button class="btn" id="btn-word">Export Word</button>
+    <button class="btn" id="btn-print">Print / PDF</button>
+  </div></div>
+
+  <div id="results">
+    <div class="notice" id="ocrnotice" style="display:none">
+      <b>This PDF had no text layer, so the pages were read by OCR.</b> The words below are the
+      model&rsquo;s reading of a scan, not text taken from the file &mdash; figures and GSTINs in
+      particular must be checked against the paper document before anything is filed.
+    </div>
+
+    <section class="card" data-label="CASE FILE" id="metacard"></section>
+
+    <div id="nodefects"></div>
+    <section class="card tablecard" data-label="DEFECT-WISE STATEMENT">
+      <div class="tablewrap">
+      <table id="defecttable">
+        <thead>
+          <tr>
+            <th class="h-no">Issue No.</th>
+            <th class="h-defect"><span class="dot"></span>Original para as per notice</th>
+            <th class="h-reply"><span class="dot"></span>Taxpayer reply</th>
+            <th class="h-concl"><span class="dot"></span>Officer&rsquo;s final finding</th>
+          </tr>
+        </thead>
+        <tbody id="defectrows"></tbody>
+      </table>
+      </div>
+    </section>
+
+    <section class="card" data-label="DEMAND &mdash; PROPOSED vs CONFIRMED" id="summarycard" style="display:none"></section>
+
+  </div>
+</main>
+
+
+<script>
+(function(){
+  'use strict';
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = window.__pdfjs_local
+      ? 'pdf.worker.min.js'
+      : 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  var $ = function(id){ return document.getElementById(id); };
+  var dropzone = $('dropzone'), fileinput = $('fileinput');
+  var state = { fileName:'', fullText:'', defectSeq:0, ocr:false };
+
+  /* ---------------- upload wiring ---------------- */
+  dropzone.addEventListener('click', function(){ fileinput.click(); });
+  dropzone.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fileinput.click(); } });
+  ['dragover','dragenter'].forEach(function(ev){
+    dropzone.addEventListener(ev, function(e){ e.preventDefault(); dropzone.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    dropzone.addEventListener(ev, function(e){ e.preventDefault(); dropzone.classList.remove('dragover'); });
+  });
+  dropzone.addEventListener('drop', function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  fileinput.addEventListener('change', function(){ if (fileinput.files[0]) handleFile(fileinput.files[0]); });
+
+  function showError(title, msg){
+    $('progress').style.display = 'none';
+    $('errorbox').style.display = 'block';
+    $('errortitle').textContent = title;
+    $('errormsg').textContent = msg;
+  }
+
+  function handleFile(file){
+    $('errorbox').style.display = 'none';
+    if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+      showError('Not a PDF', 'Please upload the order as a PDF file. Got: ' + (file.type || file.name));
+      return;
+    }
+    if (!window.pdfjsLib) {
+      showError('PDF engine missing',
+        'pdf.min.js could not be loaded. Keep pdf.min.js and pdf.worker.min.js in the same folder as this page, or connect to the internet and reload.');
+      return;
+    }
+    if (!LLM.key) {
+      $('settings').open = true;
+      $('keywarn').style.display = 'block';
+      showError('No API key set',
+        'Paste your model-server API key under "Model server settings" above, then upload the order again.');
+      return;
+    }
+    state.fileName = file.name;
+    state.ocr = false;
+    $('progress').style.display = 'block';
+    $('progresstext').textContent = 'Reading ' + file.name + ' …';
+    $('progressbar').style.width = '4%';
+
+    file.arrayBuffer().then(function(buf){
+      return pdfjsLib.getDocument({ data: buf }).promise;
+    }).then(function(pdf){
+      var pages = [], chain = Promise.resolve();
+      for (var i = 1; i <= pdf.numPages; i++) (function(n){
+        chain = chain.then(function(){
+          return pdf.getPage(n).then(function(page){
+            return page.getTextContent();
+          }).then(function(tc){
+            pages.push(itemsToLines(tc.items));
+            $('progresstext').textContent = 'Extracting page ' + n + ' of ' + pdf.numPages + ' …';
+            $('progressbar').style.width = Math.round(4 + 92 * n / pdf.numPages) + '%';
+          });
+        });
+      })(i);
+      return chain.then(function(){
+        var text = pages.join('\n');
+        // A scan carries no selectable text — read the pages with the model instead.
+        return text.replace(/\s+/g,'').length >= 200 ? text : ocrDocument(pdf);
+      });
+    }).then(function(text){
+      if (text.replace(/\s+/g,'').length < 200) {
+        showError('Nothing could be read from this PDF',
+          'The pages carry no selectable text and OCR returned almost nothing. The file may be blank, ' +
+          'or the scan may be too faint to read.');
+        return;
+      }
+      state.fullText = text;
+      var lines = text.split('\n');
+
+      $('progress').style.display = 'block';
+      $('progresstext').textContent = 'Splitting the order into notice / reply / finding …';
+      $('progressbar').style.width = '4%';
+      var tick = 0;
+      return segregate(lines, function(n){
+        // the model emits a compact range list; creep the bar as it arrives
+        tick = Math.min(96, 6 + n / 12);
+        $('progressbar').style.width = tick + '%';
+      }).then(function(parsed){
+        $('progress').style.display = 'none';
+        renderAll(parsed);
+        return Promise.all([rebuildCells(), rebuildSummary()]);
+      });
+    }).catch(function(err){
+      var msg = String(err && err.message || err);
+      var pw = /password/i.test(String(err && err.name || err));
+      if (pw) return showError('Password-protected PDF', 'Remove the password from the PDF and try again.');
+      if (/HTTP 401|HTTP 403/.test(msg))
+        return showError('The model server rejected the key',
+          'Check the API key under "Model server settings". (' + msg + ')');
+      if (/HTTP 5\d\d/.test(msg))
+        return showError('The model server did not answer',
+          'It may be down, or the order may be too long for one request. (' + msg + ')');
+      if (/Failed to fetch|NetworkError/i.test(msg))
+        return showError('Could not reach the model server',
+          'Check the endpoint under "Model server settings" and that the server is running. (' + msg + ')');
+      showError('Could not process this order', msg);
+    });
+  }
+
+  /* ---------------- text reconstruction ----------------
+     pdf.js returns fragments with coordinates; rebuild visual lines:
+     group by Y (tolerance), order by X, and insert spacing by gap size
+     so table rows stay on one line and columns stay separated. */
+  function itemsToLines(items){
+    var rows = [];
+    items.forEach(function(it){
+      if (!it.str || !it.str.trim()) return;
+      var x = it.transform[4], y = it.transform[5];
+      var row = null;
+      for (var i = rows.length - 1; i >= 0; i--) {
+        if (Math.abs(rows[i].y - y) < 3.5) { row = rows[i]; break; }
+      }
+      if (!row) { row = { y: y, items: [] }; rows.push(row); }
+      row.items.push({ x: x, w: it.width || 0, str: it.str });
+    });
+    rows.sort(function(a,b){ return b.y - a.y; });
+    return rows.map(function(r){
+      r.items.sort(function(a,b){ return a.x - b.x; });
+      var line = '', endX = null;
+      r.items.forEach(function(it){
+        if (endX !== null) {
+          var gap = it.x - endX;
+          if (gap > 12) line += '   ';
+          else if (gap > 1) line += ' ';
+        }
+        line += it.str;
+        endX = it.x + it.w;
+      });
+      return line.replace(/[ \t]+$/,'');
+    }).filter(function(l){ return l.trim().length > 0; }).join('\n');
+  }
+
+  /* ---------------- model settings ---------------- */
+  var LLM = {
+    url:   localStorage.getItem('gst_api_url')   || 'https://api.jaypokale.me/v1',
+    key:   localStorage.getItem('gst_api_key')   || '',
+    model: localStorage.getItem('gst_model')     || 'Qwen/Qwen3.6-27B-FP8'
+  };
+
+  /* ---------------- sign-in gate ----------------
+     The username and password are a curtain: the page is static, so they are
+     readable by anyone who views the source, and they gate nothing on the server.
+     The API KEY is the real credential - it is deliberately NOT in this file, it is
+     typed here, and it is checked against the model server before the page opens.
+     Someone without a key gets a page that cannot do anything. */
+  var GATE_USER = 'admin', GATE_PASS = 'DEMO_2026';
+
+  function checkKey(key){
+    return fetch(LLM.url.replace(/\/+$/,'') + '/models', {
+      headers: { 'Authorization': 'Bearer ' + key }
+    }).then(function(r){ return r.ok; }, function(){ return null; });   // null = unreachable
+  }
+
+  (function gate(){
+    var box = $('gate'), form = $('gateform'), btn = $('gate-go'), err = $('gate-err');
+    if (sessionStorage.getItem('gst_signed_in') === '1' && LLM.key) {
+      box.classList.add('hidden');
+      return;
+    }
+    $('gate-key').value = LLM.key;          // returning user on this browser
+    function fail(msg, field){
+      err.textContent = msg;
+      form.classList.remove('bad');
+      void form.offsetWidth;                // restart the shake
+      form.classList.add('bad');
+      btn.disabled = false; btn.textContent = 'Sign in';
+      if (field) { field.value = field === $('gate-key') ? field.value : ''; field.focus(); }
+    }
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var u = $('gate-user').value.trim(), p = $('gate-pass').value, k = $('gate-key').value.trim();
+      if (u !== GATE_USER || p !== GATE_PASS) return fail('Wrong username or password.', $('gate-pass'));
+      if (!k) return fail('Enter the API key for the model server.', $('gate-key'));
+
+      btn.disabled = true; btn.textContent = 'Checking …';
+      checkKey(k).then(function(ok){
+        if (ok === null) return fail('Could not reach the model server. Check it is running.', null);
+        if (!ok) return fail('The model server rejected that API key.', $('gate-key'));
+        LLM.key = k;
+        localStorage.setItem('gst_api_key', k);
+        sessionStorage.setItem('gst_signed_in', '1');
+        var f = $('in-key'); if (f) f.value = k;
+        $('keywarn').style.display = 'none';
+        $('settings').open = false;
+        box.classList.add('hidden');
+        btn.disabled = false; btn.textContent = 'Sign in';
+      });
+    });
+  })();
+  (function wireSettings(){
+    var f = [['in-url','url','gst_api_url'],['in-key','key','gst_api_key'],['in-model','model','gst_model']];
+    f.forEach(function(t){
+      var el = $(t[0]);
+      el.value = LLM[t[1]];
+      el.addEventListener('input', function(){
+        LLM[t[1]] = el.value.trim();
+        localStorage.setItem(t[2], LLM[t[1]]);
+        $('keywarn').style.display = LLM.key ? 'none' : 'block';
+      });
+    });
+    if (!LLM.key) { $('keywarn').style.display = 'block'; $('settings').open = true; }
+  })();
+
+  /* ---------------- OCR for scanned orders ----------------
+     Several taxpayer replies are photocopies with no text layer. The same model
+     reads them: each page is rendered to a canvas and transcribed. 100 DPI was
+     measured to give the same transcription as 150 DPI on these documents at
+     roughly half the image tokens, so SCAN_SCALE stays modest. */
+  var SCAN_SCALE = 1.45;         // pdf.js scale 1 = 72 DPI, so ~104 DPI
+  var OCR_PARALLEL = 3;          // pages in flight; the server handles 3 comfortably
+  var OCR_PROMPT =
+    'Transcribe every word of this document page as plain text. Preserve the line breaks and keep ' +
+    'table rows on one line with columns separated by spaces. Do not summarise, translate, correct or ' +
+    'comment - output the transcription only.';
+
+  function pageToDataURL(pdf, n){
+    return pdf.getPage(n).then(function(page){
+      var vp = page.getViewport({ scale: SCAN_SCALE });
+      var c = document.createElement('canvas');
+      c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      return page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise
+        .then(function(){ return c.toDataURL('image/png'); });
+    });
+  }
+
+  function ocrPage(dataURL){
+    return fetch(LLM.url.replace(/\/+$/,'') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + LLM.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: LLM.model,
+        messages: [{ role:'user', content: [
+          { type:'text', text: OCR_PROMPT },
+          { type:'image_url', image_url:{ url: dataURL } }
+        ]}],
+        max_tokens: 4000,
+        temperature: 0,
+        chat_template_kwargs: { enable_thinking: false }
+      })
+    }).then(function(res){
+      if (!res.ok) return res.text().then(function(t){
+        throw new Error('HTTP ' + res.status + (t ? ' — ' + t.slice(0,200) : ''));
+      });
+      return res.json();
+    }).then(function(d){ return (d.choices[0].message.content || '').trim(); });
+  }
+
+  /* Pages are transcribed a few at a time and reassembled in page order. One bad
+     page is marked in place rather than losing the whole document. */
+  function ocrDocument(pdf){
+    var total = pdf.numPages, out = new Array(total), done = 0, next = 0;
+    $('progresstext').textContent = 'No text layer — reading ' + total + ' scanned page' +
+      (total === 1 ? '' : 's') + ' with the model …';
+    $('progressbar').style.width = '2%';
+
+    function worker(){
+      if (next >= total) return Promise.resolve();
+      var n = ++next;                     // 1-based page number
+      return pageToDataURL(pdf, n)
+        .then(ocrPage)
+        .then(function(txt){ out[n-1] = txt; }, function(err){
+          out[n-1] = '[page ' + n + ' could not be read: ' + (err.message || err) + ']';
+        })
+        .then(function(){
+          done++;
+          $('progresstext').textContent = 'Read ' + done + ' of ' + total + ' scanned pages …';
+          $('progressbar').style.width = Math.round(2 + 90 * done / total) + '%';
+          return worker();
+        });
+    }
+    var lanes = [];
+    for (var i = 0; i < Math.min(OCR_PARALLEL, total); i++) lanes.push(worker());
+    return Promise.all(lanes).then(function(){
+      state.ocr = true;
+      return out.join('\n');
+    });
+  }
+
+  /* ---------------- tidy view ----------------
+     Tables in these orders lose their grid when the PDF is flattened to text: a
+     description cell spread over five lines ends up interleaved with the figures.
+     Tidying asks the model to rebuild the table. That makes the cell MODEL-WRITTEN
+     rather than sliced, so it is opt-in, reversible per cell, and every number is
+     checked against the verbatim text before the result is shown. */
+  var TIDY_PROMPT =
+    'The text below was extracted from a PDF and lost its layout. Reformat it for display.\n\n' +
+    '- Where the text is a table, output a GitHub markdown table. Cell text that was split across\n' +
+    '  several lines belongs back in its own cell.\n' +
+    '- Leave prose as prose, joining lines that were wrapped mid-sentence.\n' +
+    '- Keep the bullet/heading line at the top as its own line.\n' +
+    '- Copy every figure exactly as written. Do not correct, round, invent or compute anything, and\n' +
+    '  do not fill in blanks.\n' +
+    '- A figure broken across two lines is one figure - join it ("253373" then "89" is 25337389).\n' +
+    '  The same goes for a list of HSN codes split over several lines.\n' +
+    '- The extraction interleaves rows badly. Reconstruct the table as best you can and ALWAYS return\n' +
+    '  a table for tabular content - never fall back to plain lines because the input looks jumbled.\n' +
+    '- Output only the reformatted text, no commentary and no code fences.';
+
+  function tidyText(text){
+    return fetch(LLM.url.replace(/\/+$/,'') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + LLM.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: LLM.model,
+        messages: [{ role:'system', content: TIDY_PROMPT }, { role:'user', content: text }],
+        max_tokens: 4000, temperature: 0,
+        chat_template_kwargs: { enable_thinking: false }
+      })
+    }).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(d){
+      return (d.choices[0].message.content || '').replace(/```[a-z]*/gi, '').trim();
+    });
+  }
+
+  /* No figure check: a readable table is wanted even when the source table is so
+     interleaved that reconstructing it loses a row. Nothing on the page holds the
+     untouched text any more, so figures are checked against the signed PDF itself. */
+
+  /* Minimal markdown: pipe tables become real tables, everything else stays text. */
+  function mdToHtml(md){
+    var out = '', rows = null;
+    /* A cell holding one figure is right-aligned, monospaced and never wrapped.
+       A list of HSN codes ("8544,8539,8535,8536,...") is digits and commas too but
+       is NOT a figure - grouping separators come in 2s and 3s, HSN codes in 4s.
+       Treating it as a figure made it refuse to wrap and run into the next column. */
+    var isNum = function(c){
+      var s = String(c).trim().replace(/^\(/, '').replace(/[)%]$/, '').trim();
+      return /^-?\d+(\.\d+)?$/.test(s) || /^-?\d{1,3}(,\d{2,3})+(\.\d+)?$/.test(s);
+    };
+    function flush(){
+      if (!rows) return;
+      var head = rows[0], body = rows.slice(1).filter(function(r){
+        return !/^[\s|:-]+$/.test(r.join(''));       // drop the |---|---| separator
+      });
+      // a column is numeric when every body cell in it is a figure
+      var numeric = head.map(function(_, i){
+        return body.length > 0 && body.every(function(r){ return !r[i] || isNum(r[i]); });
+      });
+      // a serial-number column needs a fraction of the width a money column does
+      var narrow = head.map(function(_, i){
+        if (!numeric[i]) return false;
+        return body.every(function(r){ return !r[i] || String(r[i]).trim().length <= 3; });
+      });
+      var cls = function(i){ return numeric[i] ? (narrow[i] ? ' class="num nums"' : ' class="num"') : ''; };
+      // Percentage widths cannot fit five 9-digit figures into a 29%-wide column:
+      // the figures overflow and the headers collide. Let the columns size to their
+      // content and scroll the table inside its own cell instead.
+      /* Percentage widths cannot know how many figure columns a table has, so a
+         5-column table clipped its TOTAL while a 3-column one wasted space. Size
+         each figure column from its longest value instead (monospace, ~5.9px per
+         digit at 9.5px, plus padding and border) and let the text columns take
+         whatever is left - table-layout:fixed honours the fixed widths and shares
+         the remainder among the rest. */
+      var colw = head.map(function(h, i){
+        if (!numeric[i]) return null;
+        var len = Math.max(String(h).length, Math.max.apply(null,
+          body.map(function(r){ return String(r[i] || '').trim().length; }).concat([1])));
+        return Math.ceil(len * 5.9) + 16;
+      });
+      /* Width this table needs to stay readable: its figure columns, plus a floor for
+         each text column. Checked against the real cell width once it is on the page
+         (see fitTables). A column count cannot decide this - the same table fits on a
+         wide screen and does not on a narrow one. */
+      var needs = colw.reduce(function(a, w){ return a + (w === null ? 118 : w); }, 2);
+      out += '<div class="tidywrap" data-needs="' + needs + '">' +
+        '<table class="tidytab">' +
+        '<colgroup>' + colw.map(function(w){
+          return '<col' + (w ? ' style="width:' + w + 'px"' : '') + '>';
+        }).join('') + '</colgroup>' +
+        '<thead><tr>' +
+        head.map(function(c, i){
+          return '<th' + cls(i) + '>' + esc(c) + '</th>';
+        }).join('') + '</tr></thead><tbody>' +
+        body.map(function(r){
+          return '<tr>' + head.map(function(_, i){
+            var c = r[i] == null ? '' : r[i];
+            return '<td' + (numeric[i] && isNum(c) ? cls(i) : '') + '>' + esc(c) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>';
+      rows = null;
+    }
+    md.split('\n').forEach(function(line){
+      if (line.indexOf('|') >= 0 && line.replace(/[^|]/g,'').length >= 2) {
+        var cells = line.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|')
+                        .map(function(c){ return c.trim(); });
+        (rows = rows || []).push(cells);
+      } else {
+        flush();
+        out += line.trim() ? '<p>' + esc(line) + '</p>' : '';
+      }
+    });
+    flush();
+    return out;
+  }
+
+  /* ---------------- segregation ----------------
+     The model is given the order with every line numbered and returns only LINE
+     RANGES per issue. We slice those ranges locally, so each column is verbatim
+     text from the PDF — the model cannot paraphrase or invent an officer's finding. */
+  var PROMPT =
+    'You are parsing a GST assessment order (Form DRC-07) issued by an Indian state tax officer. ' +
+    'Every line is prefixed with its line number.\n\n' +
+    'Such an order interleaves three voices, usually in this sequence:\n' +
+    '  1. THE NOTICE  - the department\'s original discrepancy/defect paragraphs (the DRC-01 / DRC-01A\n' +
+    '     proposal restated in the order), with its tables.\n' +
+    '  2. THE REPLY   - what the taxpayer submitted in answer. Introduced by phrases like "the taxpayers\n' +
+    '     in reply dated ... has stated as follows", "the taxable person has filed their reply ... and\n' +
+    '     stated that", "The taxpayer have filed reply as follows". There are often SEVERAL reply rounds\n' +
+    '     (DRC-01A reply, then DRC-06 reply) - capture each.\n' +
+    '  3. THE FINDING - the officer\'s own conclusion on that reply. Introduced by "Scrutiny reveals that",\n' +
+    '     "The above taxable person reply has been considered carefully ... and found that",\n' +
+    '     "FINDINGS OF THE PROPER OFFICER".\n\n' +
+    'Split the order BY ISSUE (e.g. "Short payment of tax under RCM", "Claim of Ineligible ITC-Sec 17(5)",\n' +
+    '"Scrutiny of ITC availed under Imports"). For each issue give the line ranges of its notice text, its\n' +
+    'reply text, and the officer\'s finding. An issue\'s three parts sit far apart in the document - that is\n' +
+    'expected.\n\n' +
+    'Rules:\n' +
+    '- Report line ranges only. Do not quote, summarise or rewrite the order.\n' +
+    '- Ranges are inclusive and 1-based. Use several ranges per part when the text is split across the\n' +
+    '  document (multiple reply rounds, interim + final finding).\n' +
+    '- Include the issue\'s data tables inside the range they belong to.\n' +
+    '- Leave a part as [] if the order genuinely has no such text for that issue.\n' +
+    '- Skip the covering letter, the Ref list, the standard Notes, the personal hearing boilerplate, the\n' +
+    '  final demand table and the signature block.\n' +
+    '- Skip trailing annexures (long invoice-level listings after the signature).\n' +
+    '- status reflects the officer\'s final decision on that issue.\n' +
+    '- The upload may be the SHOW CAUSE NOTICE itself (Form DRC-01) rather than the final order. A\n' +
+    '  notice carries only the department\'s paragraphs: no reply has been filed and nothing has been\n' +
+    '  decided yet. Then leave reply and finding as [] and set status "unclear". Never treat the closing\n' +
+    '  proposal boilerplate ("Therefore, it is proposed to assess ...", "If you are not agreeing with the\n' +
+    '  proposals ...", the personal hearing offer) as a finding - it is part of the notice.\n\n' +
+    'Also locate the two demand tables, which are NOT the same figures:\n' +
+    '- demand.proposed - the summary of tax/interest/penalty the NOTICE proposed. It appears before\n' +
+    '  the replies, often under a heading like "Summary :".\n' +
+    '- demand.confirmed - what the officer actually CONFIRMED, in the table after the findings, near\n' +
+    '  "orders passed under section 73(9) ... as follows" and before the signature. If the officer\n' +
+    '  dropped everything there is no such table: return [] rather than pointing at the proposed one.\n\n' +
+    'Reply with JSON only, this shape:\n' +
+    '{\n' +
+    '  "case": {"taxpayer": "", "gstin": "", "period": "", "order_date": "", "office": "", "section": ""},\n' +
+    '  "demand": {"proposed": [[start_line, end_line]], "confirmed": [[start_line, end_line]]},\n' +
+    '  "issues": [\n' +
+    '    {"title": "short name of the defect, as printed in the order",\n' +
+    '     "notice":  [[start_line, end_line]],\n' +
+    '     "reply":   [[start_line, end_line]],\n' +
+    '     "finding": [[start_line, end_line]],\n' +
+    '     "status": "confirmed | dropped | partly_confirmed | accepted | unclear"}\n' +
+    '  ]\n' +
+    '}';
+
+  /* Streamed so the request never sits idle — a proxy in front of the model server
+     (Cloudflare) drops a silent connection at 100s and a long order takes longer. */
+  function segregate(lines, onTick){
+    var numbered = lines.map(function(l, i){
+      return String(i + 1).padStart(5,' ') + '| ' + l;
+    }).join('\n');
+
+    return fetch(LLM.url.replace(/\/+$/,'') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + LLM.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: LLM.model,
+        messages: [{ role:'system', content: PROMPT }, { role:'user', content: numbered }],
+        max_tokens: 8000,
+        temperature: 0.1,
+        chat_template_kwargs: { enable_thinking: false },
+        stream: true
+      })
+    }).then(function(res){
+      if (!res.ok) {
+        return res.text().then(function(t){
+          throw new Error('HTTP ' + res.status + (t ? ' — ' + t.slice(0,300) : ''));
+        });
+      }
+      return readStream(res, onTick);
+    }).then(function(raw){
+      var parsed = extractJson(raw);
+      var d = parsed.demand || {};
+      parsed.demand = {
+        proposed:  sliceRanges(lines, d.proposed),
+        confirmed: sliceRanges(lines, d.confirmed)
+      };
+      parsed.issues = (parsed.issues || []).map(function(iss){
+        iss.notice_text  = sliceRanges(lines, iss.notice);
+        iss.reply_text   = sliceRanges(lines, iss.reply);
+        iss.finding_text = sliceRanges(lines, iss.finding);
+        // nothing decided => nothing to stamp. Guards a show cause notice being
+        // read as though the demand were already confirmed.
+        if (!iss.finding_text) iss.status = 'unclear';
+        return iss;
+      // the portal's DRC07_ORDER_*.pdf has no narrative: the model still names the
+      // subject line as an "issue" but every range comes back empty. Drop those so
+      // the "nothing to split" notice shows instead of a blank row.
+      }).filter(function(iss){
+        return iss.notice_text || iss.reply_text || iss.finding_text;
+      });
+      return parsed;
+    });
+  }
+
+  function readStream(res, onTick){
+    var reader = res.body.getReader(), dec = new TextDecoder(), buf = '', out = '';
+    return (function pump(){
+      return reader.read().then(function(r){
+        if (r.done) return out;
+        buf += dec.decode(r.value, { stream:true });
+        var parts = buf.split('\n');
+        buf = parts.pop();
+        parts.forEach(function(line){
+          line = line.trim();
+          if (!line.indexOf('data:')) line = line.slice(5).trim();
+          if (!line || line === '[DONE]') return;
+          try {
+            var d = JSON.parse(line).choices[0].delta;
+            if (d && d.content) out += d.content;
+          } catch (e) { /* keep-alive / partial frame */ }
+        });
+        if (onTick) onTick(out.length);
+        return pump();
+      });
+    })();
+  }
+
+  function extractJson(s){
+    s = s.replace(/```(?:json)?/g, '').trim();
+    var i = s.indexOf('{'), j = s.lastIndexOf('}');
+    if (i < 0 || j < 0) throw new Error('The model did not return JSON. It said: ' + s.slice(0,300));
+    return JSON.parse(s.slice(i, j + 1));
+  }
+
+  function sliceRanges(lines, ranges){
+    if (!ranges || !ranges.length) return '';
+    return ranges.map(function(r){
+      var a = Math.max(1, parseInt(r[0],10)), b = Math.min(lines.length, parseInt(r[1],10));
+      return lines.slice(a - 1, b).join('\n').trim();
+    }).filter(Boolean).join('\n\n');
+  }
+
+  var STATUS_LABEL = {
+    confirmed:       { key:'confirmed', label:'Confirmed'       },
+    dropped:         { key:'dropped',   label:'Dropped'         },
+    accepted:        { key:'accepted',  label:'Accepted'        },
+    partly_confirmed:{ key:'partly',    label:'Partly Confirmed'},
+    unclear:         { key:'review',    label:'For Review'      }
+  };
+  function statusOf(s){
+    return STATUS_LABEL[String(s || '').toLowerCase()] || STATUS_LABEL.unclear;
+  }
+
+
+  /* ---------------- rendering ---------------- */
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderAll(parsed){
+    dropzone.style.display = 'none';
+    $('settings').style.display = 'none';
+    $('keywarn').style.display = 'none';
+    $('toolbar').style.display = 'block';
+    $('results').style.display = 'block';
+    $('docname').textContent = state.fileName;
+
+    var c = parsed['case'] || {};
+    renderMeta({ taxpayer:c.taxpayer, gstin:c.gstin, period:c.period,
+                 dated:c.order_date, section:c.section, office:c.office });
+
+    var host = $('defectrows');
+    host.innerHTML = '';
+    state.defectSeq = 0;
+    var issues = parsed.issues || [];
+    $('ocrnotice').style.display = state.ocr ? 'block' : 'none';
+    $('nodefects').innerHTML = issues.length === 0
+      ? '<div class="notice"><b>No issues were found in this document.</b> The portal-generated ' +
+        '<b>DRC07_ORDER_*.pdf</b> is only the demand summary form — it carries no notice/reply/finding ' +
+        'narrative to split. Upload the <b>signed</b> DRC-07 order instead. The full extracted text is at ' +
+        'the bottom of the page, and <b>+ Add issue</b> builds a row manually.</div>'
+      : '';
+    issues.forEach(function(iss, n){
+      host.appendChild(defectRow({
+        num: n + 1,
+        title: iss.title || ('Issue ' + (n + 1)),
+        defect: iss.notice_text,
+        reply: iss.reply_text,
+        conclusion: iss.finding_text,
+        status: statusOf(iss.status)
+      }));
+    });
+    updateCount();
+    renderDemand(parsed.demand);
+    window.scrollTo({ top: 0 });
+  }
+
+  function renderMeta(meta){
+    var f = function(label, value){
+      return '<div class="field"><label>' + label + '</label>' +
+        '<div contenteditable="true" spellcheck="false">' + (esc(value) || '&mdash;') + '</div></div>';
+    };
+    var html = '<div class="metagrid">' +
+      f('Taxpayer', meta.taxpayer) +
+      f('GSTIN', meta.gstin) +
+      f('Period', meta.period) +
+      f('Order dated', meta.dated) +
+      f('Section', meta.section ? 'Sec ' + meta.section : '') +
+      f('Office / Circle', meta.office) +
+      '</div>';
+    if (meta.subject) html += '<div class="metagrid" style="margin-top:16px">' + f('Subject', meta.subject) + '</div>';
+    if (meta.refs) html += '<details><summary>Notice history / references</summary><pre>' + esc(meta.refs) + '</pre></details>';
+    $('metacard').innerHTML = html;
+  }
+
+  function defectRow(d){
+    state.defectSeq++;
+    var el = document.createElement('tr');
+    var numLabel = 'ISSUE ' + String(d.num != null ? d.num : state.defectSeq).padStart(2,'0');
+    var cell = function(text, placeholder){
+      var hasText = text && text.trim();
+      return '<td><div class="col-body' + (hasText ? '' : ' empty') + '" contenteditable="true" spellcheck="false" title="Click to edit">' +
+        (hasText ? esc(text) : placeholder) + '</div></td>';
+    };
+    el.innerHTML =
+      '<td class="defect-info">' +
+        '<span class="defect-no">' + numLabel + '</span>' +
+        '<div class="defect-title" contenteditable="true" spellcheck="false" title="Click to edit">' + esc(d.title) + '</div>' +
+        '<span class="stamp ' + d.status.key + '" title="Auto-detected from the Conclusion wording — click to change">' +
+          d.status.label + '</span>' +
+        '<button class="del" title="Remove this defect">remove</button>' +
+      '</td>' +
+      cell(d.defect, 'No notice paragraph found for this issue — paste it here.') +
+      cell(d.reply, 'No taxpayer reply found for this issue — paste it here if present.') +
+      cell(d.conclusion, 'No officer finding found for this issue — paste it here if present.');
+    el.querySelector('.del').addEventListener('click', function(){
+      if (confirm('Remove ' + numLabel + ' from the statement? (The PDF itself is untouched.)')) {
+        el.remove(); updateCount();
+      }
+    });
+    var STATUSES = [
+      { key:'confirmed', label:'Confirmed' },
+      { key:'partly',    label:'Partly Confirmed' },
+      { key:'dropped',   label:'Dropped'   },
+      { key:'accepted',  label:'Accepted'  },
+      { key:'review',    label:'For Review'}
+    ];
+    el.querySelector('.stamp').addEventListener('click', function(){
+      var cur = 0;
+      STATUSES.forEach(function(s, i){ if (this.classList.contains(s.key)) cur = i; }, this);
+      var next = STATUSES[(cur + 1) % STATUSES.length];
+      this.className = 'stamp ' + next.key;
+      this.textContent = next.label;
+    });
+    el.querySelectorAll('.col-body').forEach(function(cb){
+      cb.addEventListener('focus', function(){
+        if (cb.classList.contains('empty')) { cb.textContent = ''; cb.classList.remove('empty'); }
+      });
+      cb.dataset.verbatim = cb.textContent;
+    });
+    return el;
+  }
+
+  function updateCount(){
+    var n = document.querySelectorAll('#defectrows tr').length;
+    $('defectcount').textContent = n + ' issue' + (n === 1 ? '' : 's');
+  }
+
+  /* Two demand figures, side by side. Showing only the proposed one - as this card
+     used to - reads as the outcome, which it is not: an order that drops every issue
+     confirms nothing while the notice still proposed crores. */
+  function renderDemand(demand){
+    var card = $('summarycard');
+    demand = demand || {};
+    if (!demand.proposed && !demand.confirmed) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+
+    var box = function(label, text, empty){
+      return '<div class="demandbox"><h4>' + label + '</h4>' +
+        (text
+          ? '<pre class="sumraw" contenteditable="true" spellcheck="false">' + esc(text) + '</pre>'
+          : '<p class="demandnone">' + empty + '</p>') +
+        '</div>';
+    };
+    card.innerHTML = '<div class="demandpair">' +
+      box('As proposed in the notice', demand.proposed,
+          'No proposed demand table found in this document.') +
+      box('As confirmed in the order', demand.confirmed,
+          'The order carries no final demand table &mdash; nothing was confirmed. ' +
+          'Check the issue statuses above; a demand appears only where an issue was confirmed.') +
+      '</div>';
+  }
+
+  /* ---------------- tidy / verbatim switching ---------------- */
+  /* Rebuild every cell's tables. A cell is blurred while it is being worked on and
+     revealed once it is ready, so the reader never sees the half-formed version.
+     If the figure check fails the cell simply keeps the order's own text — a wrong
+     number must never reach the page, and silently keeping the original is safer
+     than showing a reformatted cell with a warning next to it. */
+  /* Decide per table whether it fits its cell. Fitting is much better to read, so it
+     is the default; a table that cannot fit at a readable size scrolls inside its own
+     cell instead of squeezing the description to one letter per line. Re-run on resize
+     because the answer changes with the window. */
+  function fitTables(root){
+    (root || document).querySelectorAll('.tidywrap[data-needs]').forEach(function(w){
+      var tab = w.querySelector('table');
+      if (!tab) return;
+      var fits = w.clientWidth >= parseInt(w.dataset.needs, 10);
+      w.classList.toggle('wide', !fits);
+      tab.classList.toggle('wide', !fits);
+    });
+  }
+  window.addEventListener('resize', function(){ fitTables(); });
+
+  function rebuildCells(){
+    var cells = [].slice.call(document.querySelectorAll('#defectrows .col-body'))
+      .filter(function(c){ return !c.classList.contains('empty') && (c.textContent||'').trim(); });
+    if (!cells.length || !LLM.key) return Promise.resolve();
+
+    cells.forEach(function(c){
+      c.dataset.verbatim = c.dataset.verbatim || c.textContent;
+      c.classList.add('working');
+      c.parentNode.classList.add('loading');      // spinner sits on the cell, unblurred
+    });
+
+    var next = 0;
+    function worker(){
+      if (next >= cells.length) return Promise.resolve();
+      var cell = cells[next++];
+      var original = cell.dataset.verbatim;
+      return tidyText(original).then(function(md){
+        if (md) { cell.innerHTML = mdToHtml(md); fitTables(cell); }
+      }).catch(function(){ /* the request failed - keep the extracted text */ })
+        .then(function(){
+          cell.classList.remove('working');
+          cell.parentNode.classList.remove('loading');
+          return worker();
+        });
+    }
+    var lanes = [];
+    for (var i = 0; i < Math.min(3, cells.length); i++) lanes.push(worker());
+    return Promise.all(lanes);
+  }
+
+  /* the demand summary is one more block of the same flattened-table text */
+  function rebuildSummary(){
+    var card = $('summarycard');
+    var pres = [].slice.call(card.querySelectorAll('.sumraw'));
+    if (!pres.length || !LLM.key) return Promise.resolve();
+    card.classList.add('loading');                // spinner on the card stays sharp
+    pres.forEach(function(p){ p.classList.add('working'); });   // blur the text only
+    return Promise.all(pres.map(function(pre){
+      var original = pre.textContent;
+      return tidyText(original).then(function(md){
+        if (md) {
+          var host = document.createElement('div');
+          host.className = 'sumtidy';
+          host.innerHTML = mdToHtml(md);
+          pre.parentNode.replaceChild(host, pre);
+          fitTables(host);
+        }
+      }).catch(function(){ /* the request failed - keep the extracted text */ })
+        .then(function(){ pre.classList.remove('working'); });
+    })).then(function(){ card.classList.remove('loading'); });
+  }
+
+  /* ---------------- toolbar actions ---------------- */
+
+  $('btn-print').addEventListener('click', function(){ window.print(); });
+  $('btn-new').addEventListener('click', function(){
+    if (!confirm('Start over with a new file? Unsaved edits will be lost.')) return;
+    $('results').style.display = 'none';
+    $('toolbar').style.display = 'none';
+    dropzone.style.display = 'block';
+    $('settings').style.display = 'block';
+    fileinput.value = '';
+    window.scrollTo({ top: 0 });
+  });
+  $('btn-add').addEventListener('click', function(){
+    var row = defectRow({
+      num: null, title: 'New issue — edit title',
+      defect: '', reply: '', conclusion: '',
+      status: { key:'review', label:'For Review' }
+    });
+    $('defectrows').appendChild(row);
+    updateCount();
+    row.scrollIntoView({ behavior:'smooth', block:'center' });
+  });
+
+  /* Word export reads the live table, so in-place edits are included. */
+  $('btn-word').addEventListener('click', function(){
+    var nl2br = function(t){ return esc(t).replace(/\n/g, '<br>'); };
+    var head = '<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">' +
+      '<style>body{font-family:Cambria,Georgia,serif;font-size:11pt}' +
+      'table{border-collapse:collapse;width:100%;margin:10pt 0 18pt}' +
+      'td,th{border:1pt solid #444;padding:6pt;vertical-align:top;font-size:10pt}' +
+      'th{background:#eee9dc;text-align:left}h1{font-size:16pt}h2{font-size:12pt;margin:14pt 0 2pt}' +
+      '.meta td{border:none;padding:2pt 14pt 2pt 0;font-size:10.5pt}</style></head><body>';
+    var out = head + '<h1>Para-wise Remarks Statement</h1>';
+
+    out += '<table class="meta">';
+    document.querySelectorAll('#metacard .metagrid .field').forEach(function(fd){
+      out += '<tr><td><b>' + esc(fd.querySelector('label').textContent) + ':</b></td><td>' +
+             esc(fd.querySelector('div').innerText) + '</td></tr>';
+    });
+    out += '</table>';
+
+    out += '<h2>Issue-wise Statement</h2>' +
+      '<table><tr><th style="width:12%">Issue No.</th><th style="width:29%">Original para as per notice</th>' +
+      '<th style="width:29%">Taxpayer Reply</th><th>Officer\'s final finding</th></tr>';
+    document.querySelectorAll('#defectrows tr').forEach(function(row){
+      var no = row.querySelector('.defect-no').textContent;
+      var title = row.querySelector('.defect-title').innerText.trim();
+      var status = row.querySelector('.stamp').textContent;
+      out += '<tr><td><b>' + esc(no) + '</b><br>' + esc(title) + '<br>[' + esc(status) + ']</td>';
+      row.querySelectorAll('.col-body').forEach(function(c){
+        out += '<td>' + (c.classList.contains('empty') ? '&mdash;' : nl2br(c.innerText)) + '</td>';
+      });
+      out += '</tr>';
+    });
+    out += '</table>';
+
+    var sumcard = $('summarycard');
+    if (sumcard.style.display !== 'none') {
+      out += '<h2>Demand Summary</h2>';
+      var tab = sumcard.querySelector('table');
+      if (tab) out += tab.outerHTML;
+      else out += '<p>' + nl2br(sumcard.innerText) + '</p>';
+    }
+    out += '<p style="font-size:9pt;color:#666">Generated from ' + esc(state.fileName) +
+           ' &mdash; verify all figures against the signed order before filing.</p></body></html>';
+
+    var blob = new Blob(['﻿', out], { type: 'application/msword' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    var base = (state.fileName || 'order').replace(/\.pdf$/i,'').replace(/[^\w\- ]+/g,'').trim() || 'order';
+    a.download = 'Parawise-Remarks - ' + base + '.doc';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  });
+})();
+</script>
+</body>
+</html>

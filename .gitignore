@@ -1,9 +1,40 @@
-# never commit taxpayer documents
+# --- taxpayer documents: never commit -----------------------------------
+# The corpora are confidential and large (Good_Notices is 3.8 GB). They sit
+# beside the code on whichever machine runs it, not in the repository.
 *.pdf
-!pdf.min.js
-!pdf.worker.min.js
+!web/pdf.min.js
+!web/pdf.worker.min.js
+# Two PDFs carry no taxpayer data: the official parameter list the pipeline is
+# built around, and this repo's own documentation.
+!Parameters_TN.pdf
+!DOCUMENT.pdf
+Good_Notices__24_07_2026/
+Notices_21-22/
+Selected/
+Reply_WO*/
+*.zip
 
-# cloudflared credentials must never be committed
+# --- credentials ---------------------------------------------------------
+.gst_api_key
 .cloudflared/
 *.pem
 config-remarks.yml
+
+# --- caches and intermediate JSON ----------------------------------------
+# Every stage is resumable because it caches; the caches are reproducible and
+# run to hundreds of megabytes, so they are rebuilt rather than cloned.
+work/
+work2/
+work_reply_wo/
+archive/
+__pycache__/
+*.pyc
+
+# --- outputs -------------------------------------------------------------
+# Workbooks are built, not versioned. item_desc.xlsx is the exception: it is
+# an input the pipeline reads, and is force-added.
+*.xlsx
+!item_desc.xlsx
+para_wise_register.xlsx
+
+.DS_Store

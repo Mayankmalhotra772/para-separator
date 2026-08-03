@@ -90,6 +90,11 @@ Rules:
   left out entirely - that is a correct and expected answer.
 - Copy every figure exactly as printed. Never compute, round or correct one.
 - Keep the taxpayer's wording. Tidy line breaks and spacing only.
+- Copy, do not describe. Never turn a table into a sentence, never summarise a
+  paragraph, never rewrite a phrase into clearer English. "Taxes payable as per
+  SCN: CGST 84,90,528" is wrong where the reply printed those words in a table -
+  reproduce the rows. The officer reads this cell as the taxpayer's own words, so
+  an accurate paraphrase is still the wrong answer.
 - Put a table row's description on one line even if the reply split it.
 - Every row must have exactly as many cells as there are headers.
 - "tables" may be an empty list.

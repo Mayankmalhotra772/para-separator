@@ -433,39 +433,5 @@ rsync -avh --progress "Reply_WO Parameter Wise/" \
 
 ---
 
-## 8. When something goes wrong
 
-| symptom | cause and fix |
-|---|---|
-| `Command 'conda' not found` | use `./bin/micromamba` — see section 3 |
-| micromamba: "`CONDA_ENVS_DIRS` and `CONDA_ENVS_PATH` are both set" | old `env.sh`; `git pull` |
-| `ERROR: not on PATH: pdftotext ...` | `source env.sh` first, or the environment was built without poppler |
-| every document extracts to 0 characters | `PY` set without its `bin` on `PATH`; `run.sh` now refuses to start instead |
-| `pdftoppm` fails on every scan | scratch directory full; `run.sh` relocates it to `work2/tmp` under 2 GB free |
-| run stops at stage 2b, "is not a multimodal model" | the endpoint has no vision model; set `GST_VLM_URL`, or `GST_SKIP_VLM=1` |
-| `HTTP=000` from the curl check | endpoint unreachable from this host — network, not pipeline |
-| a case reads "No reply" but the PDF has one | check chars-per-page: under 600 it is a scan and needs OCR; over, the model missed it |
-| re-running one case changes nothing | fixed — single-case runs now write their cache and merge into `reply.json` |
-| `verify2.py` fails a coverage floor | a re-run collapsed against this dataset's own best; look at what changed before rebuilding |
 
----
-
-## 9. Which model to use
-
-Qwen3.6-27B-FP8 is the default and, on this material, the right answer. Measured
-over the full 42-case corpus, 242 notice defects:
-
-| | Qwen3.6-27B | sarvam-105b-fp8 |
-|---|---|---|
-| defects answered | **213 (88%)** | 142 (59%) |
-| mean reply cell | **~2,500 characters** | ~440 characters |
-| vision / OCR | yes | not a multimodal model |
-| JSON output | valid | unclosed arrays, stray tokens |
-| same request twice | stable | 11, then 15, then 15 answered |
-
-The gap is not knowledge. The task needs faithful copying, exact span boundaries
-and strict output format, and on a sample cell sarvam returned the parameter's
-own heading — 65 characters — where Qwen returned the taxpayer's full 10,215
-character argument from the same document. Raising sarvam's token budget makes it
-worse: at 48,000 tokens it emitted 1.46 million characters of reasoning and never
-answered.

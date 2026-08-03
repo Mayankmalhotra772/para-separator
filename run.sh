@@ -98,8 +98,21 @@ if [ "$STAGE" = "all" ]; then
     $PY text2.py || exit 1
 
     echo
-    echo "=== 2b. re-OCR the scans with Qwen vision ==="
-    $PY vlm_ocr.py || exit 1
+    # Not every endpoint accepts images - sarvam-105b-fp8 answers "is not a
+    # multimodal model" - and this stage is an improvement on tesseract's read,
+    # not a prerequisite for it. A host without a vision model still produces a
+    # workbook; the scanned replies just keep tesseract's version of their
+    # tables. GST_VLM_URL points it at a vision endpoint elsewhere.
+    if [ -n "${GST_SKIP_VLM:-}" ]; then
+        echo "=== 2b. vision OCR SKIPPED (GST_SKIP_VLM set) ==="
+    else
+        echo "=== 2b. re-OCR the scans with a vision model ==="
+        $PY vlm_ocr.py || {
+            echo "  ! vision OCR failed - keeping tesseract's read and carrying on."
+            echo "    Set GST_VLM_URL to a vision endpoint, or GST_SKIP_VLM=1 to"
+            echo "    skip this stage deliberately."
+        }
+    fi
 
     echo
     echo "=== 3. split the notice on the 21 headings (no model) ==="

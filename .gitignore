@@ -30,6 +30,13 @@ archive/
 __pycache__/
 *.pyc
 
+# On a host where nothing may be written to the home directory, the interpreter
+# and every tool cache live inside the checkout instead - see env.sh.
+env/
+.conda/
+.cache/
+tmp/
+
 # --- outputs -------------------------------------------------------------
 # Workbooks are built, not versioned. item_desc.xlsx is the exception: it is
 # an input the pipeline reads, and is force-added.

@@ -15,9 +15,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # A named environment (-n gst) always lands in ~/.conda/envs. A prefix
 # environment (-p ./env) lands where you say. The package cache is separate from
 # the environment and defaults to ~/.conda/pkgs, which is the larger of the two.
+#
+# CONDA_ENVS_DIRS only - micromamba aborts outright if CONDA_ENVS_PATH is also
+# set: "both are set, but only one must be declared".
 export CONDA_PKGS_DIRS="$HERE/.conda/pkgs"
 export CONDA_ENVS_DIRS="$HERE/.conda/envs"
-export CONDA_ENVS_PATH="$HERE/.conda/envs"
+unset CONDA_ENVS_PATH
 export MAMBA_ROOT_PREFIX="$HERE/.conda"
 
 # --- pip and the general caches --------------------------------------------

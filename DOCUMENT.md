@@ -331,20 +331,3 @@ A case folder holds the notice and the reply in separate subfolders:
 ├── DRC01_SCN/          the notice PDF
 └── DRC 01 Reply/       the taxpayer's reply PDF
 ```
-
----
-
-# 7. The browser tool
-
-`<project>/web/` is a separate, unrelated tool: one static page that turns a
-single signed DRC-07 order into a three-column para-wise statement in the
-browser. Nothing in the batch pipeline uses it.
-
-| path | what it is |
-|---|---|
-| `<project>/web/index.html` | the whole application, one file |
-| `<project>/web/pdf.min.js`, `<project>/web/pdf.worker.min.js` | pdf.js, for reading the PDF in the browser |
-| `<project>/web/README.md` | its own documentation |
-| `<project>/web/deploy/` | tmux and cloudflared scripts for serving it |
-| `<project>/web/test/segregate.test.mjs` | asserts every rendered column is verbatim from the PDF |
-| `<project>/web/test/tidy.test.mjs` | covers the table rebuild |

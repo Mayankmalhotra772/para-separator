@@ -2,8 +2,6 @@
 # The corpora are confidential and large (Good_Notices is 3.8 GB). They sit
 # beside the code on whichever machine runs it, not in the repository.
 *.pdf
-!web/pdf.min.js
-!web/pdf.worker.min.js
 # Two PDFs carry no taxpayer data: the official parameter list the pipeline is
 # built around, and this repo's own documentation.
 !Parameters_TN.pdf

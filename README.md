@@ -1,15 +1,8 @@
 # para-separator
 
-Two tools over the same GST material.
-
-**`pipeline/`** — the batch one. Reads a folder of DRC-01 cases and builds one
-Excel workbook with 21 sheets, one per scrutiny parameter. Each row is a company
-on that parameter, with the notice's defect and the taxpayer's answer side by
-side.
-
-**`web/`** — the interactive one. A single static page that takes one signed
-DRC-07 order and lays it out as a three-column para-wise statement in the
-browser. Its own README is in that folder.
+Reads a folder of DRC-01 cases and builds one Excel workbook with 21 sheets, one
+per scrutiny parameter. Each row is a company on that parameter, with the
+notice's defect and the taxpayer's answer side by side.
 
 ---
 

@@ -1,470 +1,471 @@
 # GSTR-9 Scrutiny Register — file-by-file reference
 
-Deployed at `~/<workdir>/para-separator-demo/` on the cluster login node.
-
-Host names, addresses, usernames and absolute server paths are written here as
-placeholders — `<login-node>`, `<gpu-node>`, `<user>`, `<home>`, `<workdir>`,
-`<api-host>` — because this repository is public. Substitute the real values for
-your own deployment; nothing in the code depends on them, every one is supplied
-by an environment variable or a command-line argument.
-
-The system reads a folder of GST case files and produces one Excel workbook with
-21 sheets — one per scrutiny parameter — where each row is one company showing
-the department's defect and the taxpayer's answer to it side by side.
-
-**The design rule everything follows:** the notice side is deterministic and
-verbatim; the model is used only where the documents have no structure — the
-taxpayer's reply — and every word it produces is checked against the source
-document before it is allowed into a cell.
+Host names, addresses, usernames and absolute paths are written here as
+placeholders — `<host>`, `<user>`, `<project>` — because this repository is
+public. `<project>` is the checkout directory; on the current deployment that is
+`~/Subbareddy/para-separator` on `<host>`. Nothing in the code depends on any of
+them: every one arrives as an environment variable or a command-line argument.
 
 ---
 
-## Contents
+## 1. What the system does
 
-```
-para-separator-demo/
-├── run.sh                  runs the whole pipeline                    78 lines
-├── DOCUMENT.md             this file
-├── item_desc.xlsx          input data — what each defect alleges      22 rows
-├── .gst_api_key            model API key (mode 600)
-├── Notices_21-22/          the dataset — 42 GSTINs, 143 PDFs          163 MB
-├── pipeline/               all the code — 12 files                 1,932 lines
-└── work2/                  generated — caches and intermediate JSON  ~8.4 MB
-```
+It reads a folder of GST case files and produces one Excel workbook with 21
+sheets — one per scrutiny parameter — where each row is one company, showing the
+department's defect and that taxpayer's answer to it side by side.
 
-The code, by size:
+| GSTIN | Trade name | Notice (SCN) defect | Taxpayer reply | Officer finding |
+|---|---|---|---|---|
+| | | keyword split, **verbatim** | model extraction, checked | left empty for now |
 
-| File | Lines | Role |
-|---|---:|---|
-| `pipeline/reply_llm.py` | 384 | stage 4 — the only stage that judges meaning |
-| `pipeline/scn_split.py` | 237 | stage 3 — the deterministic split |
-| `pipeline/notice_tables.py` | 225 | stage 3b — table repair |
-| `pipeline/build2.py` | 222 | stage 5 — the workbook |
-| `pipeline/params.py` | 185 | the 21 parameters |
-| `pipeline/text2.py` | 146 | stage 2 — text and OCR |
-| `pipeline/verify2.py` | 145 | stage 6 — the checks |
-| `pipeline/vlm_ocr.py` | 140 | stage 2b — vision OCR |
-| `pipeline/qwen.py` | 85 | model client |
-| `pipeline/descriptions.py` | 75 | `item_desc.xlsx` → parameter ids |
-| `pipeline/inventory2.py` | 69 | stage 1 — file discovery |
-| `pipeline/paths.py` | 19 | paths |
+**The design rule everything follows:** the notice side is deterministic and the
+reply side is checked.
+
+Column 3 is a literal slice of the extracted notice text. The 21 official
+parameter headings are matched line by line; a section runs to the next heading,
+and the document is cut dead at its `Summary :` block, which drops the summary
+table and the annexures — 57% of all notice lines on this corpus. No model
+touches it, so it cannot be paraphrased or invented.
+
+Column 4 cannot work that way. Taxpayers reproduce a departmental heading when
+they feel like it and otherwise write "Query No: 2" or nothing at all, so the
+model is given the reply text plus **only the parameter ids that case's own
+notice raised**. Ids outside that list are rejected by the parser, not merely
+discouraged in the prompt. Every figure the model writes must exist in the source
+text, and its wording must overlap the source (5-word shingles, ≥ 0.55). A
+parameter it does not answer gets the literal cell value `No reply`.
+
+Column 5 is deliberately blank — the adjudication order is not read yet.
 
 ---
 
-# 1. Top level
+## 2. The directory on this host
 
-### `run.sh` — 78 lines
-Runs the seven stages in order, each one resumable.
+```
+<project>/
+├── run.sh                    whole pipeline, one folder in, one workbook out
+├── demo.sh                   one case, printed to the terminal
+├── env.sh                    keeps the interpreter and every cache in here
+├── pipeline/                 the 13 Python files that do the work
+├── web/                      unrelated browser tool for single DRC-07 orders
+├── item_desc.xlsx            official description of each of the 21 parameters
+├── Parameters_TN.pdf         the source document those parameters come from
+├── README.md                 short version of this file
+├── DOCUMENT.md               this file
+├── CLAUDE.md                 the build plan and the measured facts behind it
+│
+├── bin/micromamba            the package manager, downloaded once
+├── env/                      Python 3.12 + poppler + tesseract + openpyxl
+├── tmp/                      OCR page renders (gigabytes during a run)
+├── work2/                    all caches: text, OCR, splits, model replies
+└── Reply_WO_Parameter_Wise/  a dataset, and where its workbook is written
+```
+
+Everything below `bin/` is generated or downloaded — none of it is in git, so
+`git pull` never touches it.
+
+---
+
+## 3. Setting it up from nothing
 
 ```bash
-bash run.sh          # everything, from PDFs to workbook
-bash run.sh build    # skip to the workbook (needs work2/ present)
+mkdir -p <project> && cd <project>
+git clone https://github.com/Mayankmalhotra772/para-separator.git .
+
+source env.sh
+
+curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+./bin/micromamba create -y -p ./env -c conda-forge python=3.12 poppler tesseract openpyxl
 ```
 
-Respects `$PY` so it can be pointed at a specific interpreter, and finds the
-stage scripts whether it sits beside them or one level above.
-
-**It also derives `PATH` from that interpreter and refuses to start if
-`pdftotext`, `pdftoppm` or `tesseract` are missing.** This guard is not
-decorative. Setting `PY` alone is not enough: `text2.py` and `vlm_ocr.py` shell
-out to those three binaries, which are resolved from `PATH`, not from the Python
-environment. Pointing `PY` at a conda environment that contained them — without
-putting its `bin` on `PATH` — produced a complete run in which **every document
-extracted to zero characters**, with no error other than a line of
-`No such file or directory: 'pdftoppm'` scrolling past. The run then cached
-those empty files, so the damage outlived it.
-
-It now prints what it resolved before doing anything:
-
-```
-python   : Python 3.12.13  (<home>/.conda/envs/gst/bin)
-pdftotext: <home>/.conda/envs/gst/bin/pdftotext
-endpoint : http://<gpu-node>:8033/v1
-```
-
-### `item_desc.xlsx` — 22 rows, 3 columns
-**Input data, not output.** For each defect: serial number, item name, and a
-plain-English description of what the department alleges — for example, for
-`Excess claim of ITC in GSTR-3B w.r.t GSTR-9`:
-
-> Total ITC claimed in GSTR-3B/GSTR-9 (Table 6A) is higher than the
-> category-wise ITC reported in GSTR-9 (Table 6I), resulting in excess ITC claim.
-
-These descriptions are what let the model recognise a taxpayer's answer that
-never names the defect. Without this file the reply stage will not start.
-
-Its rows are numbered 1–22 in the department's order, which is **not** the
-A/B/C order of the parameter list, and row 16 (interest under s.50(1)) is not
-one of the 21 parameters at all — hence the explicit mapping in
-`descriptions.py`.
-
-### `.gst_api_key`
-The key for the Qwen endpoint, mode 600. `qwen.py` reads it from here, so the
-key never appears in a command line or in shell history.
-
-### `Notices_21-22/Proper order_Adj/<GSTIN>_<suffix>/`
-The dataset. 42 case folders, each with three subfolders:
-
-| Subfolder | Contents | Used? |
-|---|---|---|
-| `DRC01_SCN/` | the show cause notice (1–2 PDFs) | yes — column 1 |
-| `DRC 01 Reply/` | the taxpayer's reply (1–3 PDFs) | yes — column 2 |
-| `DRC 01 Order/` | the adjudication order | not yet — column 3 is blank |
-
-Measured facts about this corpus, which several design decisions depend on:
-
-- All 42 notices carry native text. **No OCR needed on the notice side.**
-- **23 of the 49 reply PDFs are scans** — `pdftotext` returns about one
-  character per page.
-- Every notice ends with a `Summary :` recap followed by annexures. Cutting
-  there discards **57% of all notice lines**.
-
-### `work2/` — generated, ~8.4 MB
-Not shipped code; produced by the run and safe to delete (it costs a re-run).
-
-| Path | Written by | Holds |
-|---|---|---|
-| `work2/inventory.json` | `inventory2.py` | every PDF with size and page count |
-| `work2/text/<gstin>/<role>/<file>.txt` | `text2.py`, `vlm_ocr.py` | extracted text, one file per PDF |
-| `work2/text/…/<file>.tess.txt` | `vlm_ocr.py` | tesseract's read, kept as a second witness |
-| `work2/scn.json` | `scn_split.py` | each notice split into its defects |
-| `work2/notice_tables/`, `notice_fixed.json` | `notice_tables.py` | rebuilt tables |
-| `work2/reply_cache/`, `reply.json` | `reply_llm.py` | the taxpayer's answers |
-
----
-
-# 2. `pipeline/` — the code
-
-Listed in the order the pipeline runs them. The first three are shared
-infrastructure; the rest are the stages.
-
----
-
-## Shared
-
-### `pipeline/params.py` — 185 lines
-**The vocabulary everything else is built on.**
-
-The 21 scrutiny parameters from `Parameters_TN.pdf`, grouped A (under-declaration
-of tax, 6), B (excess claim of ITC, 10) and C (interest and late fee, 5). Each
-carries its official title, its Excel sheet name, and every spelling seen in the
-corpus — the notices say "Scrutiny of ITC availed under Imports" where the
-official list says "Excess ITC availed under Imports", and both must match.
-
-`match_heading()` compares on a **squashed** form — lowercased with every
-non-alphanumeric removed — which absorbs the stray spaces `pdftotext` leaves
-inside words (`ITC reversal s`, `a n n u a l`) and the punctuation drift between
-documents. `find_heading()` additionally lets a heading wrap over up to three
-printed lines, because `pdftotext` breaks it wherever the page did.
-
-Also holds `BOUNDARY`: group headings such as `Excess claim of ITC` and
-`Late fee calculation`. These get no sheet, but must still be recognised —
-otherwise the parameter above one of them runs on and swallows it.
-
-### `pipeline/paths.py` — 19 lines
-Every path in one place: dataset root, work directory, the three role folder
-names. No stage guesses a location.
-
-### `pipeline/qwen.py` — 85 lines
-The model client — `Qwen/Qwen3.6-27B-FP8`, thinking disabled, temperature 0.
-
-Three details that are load-bearing rather than cosmetic:
-
-- **Streaming.** Cloudflare fronts the public endpoint and kills a connection
-  that has sent nothing for ~100 seconds. Every long request died with HTTP 524
-  until the client streamed.
-- **Explicit user agent.** The same endpoint 403s Python's default agent.
-- **Broad retry.** Under load the HTTP stack raises exceptions that are not
-  `URLError` — a socket dying mid-flush raises `ValueError` — which used to kill
-  a whole worker thread instead of retrying one call.
-
-Reads the key from `GST_API_KEY`, else `.gst_api_key` in the project root.
-
----
-
-## Stage 1 — `pipeline/inventory2.py` — 69 lines
-
-Walks the 42 case folders and records every PDF with its size and page count.
-
-Chooses the **notice** file by size: the signed DRC-01 is around 1 MB, the
-portal covering form beside it around 42 KB. Verified correct on all seven
-cases that have two notice PDFs.
-
-Deliberately does **not** choose the reply file — which reply carries the
-argument cannot be known before the text exists, because 23 of them are scans
-that carry nothing at all until OCR has run.
-
-**Output:** `work2/inventory.json`
-
----
-
-## Stage 2 — `pipeline/text2.py` — 146 lines
-
-PDF to text, cached per file.
-
-`pdftotext -layout` first — the `-layout` matters, because the department's
-tables survive only while their column padding is intact.
-
-Falls back to `pdftoppm` + `tesseract` when either test fails:
-
-1. **fewer than 100 characters per page** — the PDF is a photograph of a
-   document, not a document
-2. **more than 2% control characters** — the text layer decodes to glyph codes
-   rather than words
-
-The second test exists because of one real file in this corpus: it embeds fonts
-with a custom encoding and no ToUnicode map, so `pdftotext` returned 39,592
-characters containing **4 letters**. It passed the per-page test easily, and
-Excel refused to store the result at all.
-
-The OCR result is preferred by **letter count, not length** — 39,592 characters
-of glyph codes beat any honest transcription of the same pages.
-
-**Output:** `work2/text/<gstin>/<role>/<file>.txt`
-
----
-
-## Stage 2b — `pipeline/vlm_ocr.py` — 140 lines
-
-Re-reads the scanned PDFs using Qwen's image input, one 150 dpi page at a time.
-
-tesseract recovers the words but destroys the tables, and a GST reply is mostly
-tables. On one measured page tesseract returned
-
-```
-ineligible MCdeciared  —{e [ Te
-Excess ITC claimed (1-2) | ssi  4,83,145  4,83,145 | - | 3,82,297 | 13,48,587
-```
-
-and pulled the rubber stamp into the body as `KE SOFD, u-| CHENNAI }-5]`. The
-model returned the same table as clean rows, with no stamp.
-
-**tesseract's output is not discarded.** It is kept beside the new file as
-`<name>.tess.txt` and used by `verify2.py` as an independent second witness: a
-figure that appears in neither read of a scanned page is a figure nobody
-photographed.
-
-Measured: 23 files, 245 pages, ~13 minutes.
-
----
-
-## Stage 3 — `pipeline/scn_split.py` — 237 lines
-
-**Splits the notice on the 21 headings. No model is involved.**
-
-The department prints the parameter headings verbatim in the DRC-01, so this
-needs only the heading matcher: a hit opens a section, the next heading closes
-it. Every cell is a literal slice of the cached text, so the notice column is
-**verbatim by construction** — there is no generation step that could go wrong.
-
-Two things are deliberately discarded:
-
-- **The Summary block.** Every notice ends with `Summary :`, a total-tax table
-  and the "it is proposed to assess" paragraph — a recap of all defects at once,
-  belonging to no single parameter. In the largest case it sits at line 366 of
-  1,709, and everything below it is annexures. Across the corpus this drops 57%
-  of all notice lines. Two notices carry no Summary line and fall back to the
-  closing paragraph.
-- **Group headings** (`Excess claim of ITC`, `Late fee calculation`) — recognised
-  so they can end the section above them, but given no sheet.
-
-Also extracts the trade name, which needs four different rules because this
-corpus uses four header layouts: letter style (`Name : Tvl. X`), label and value
-on one line, label above value, value above label, and one where the name
-appears only inside the subject line.
-
-**Output:** `work2/scn.json` — 242 defect sections across 42 notices, 5.8 per case.
-
----
-
-## Stage 3b — `pipeline/notice_tables.py` — 225 lines
-
-Repairs tables that `pdftotext` broke across lines.
-
-The department's tables are wider than the page, so a cell wraps and one figure
-arrives as two:
-
-```
-       GSTR-3B(Table 4A of        1277365 1 1277365 1 1219547
-  1    GSTR-3B/           6A                                    0 0 124509451
-                                                     209                    1
-```
-
-which is `12773651`, `12773651`, `1219547209` and `1245094511`. **87 of the 242
-sections** have this damage. Nothing textual can reassemble it reliably, because
-the join is a column position, not a delimiter.
-
-So the section goes to the model to be returned as prose plus real table rows,
-and the result is checked before use: **every figure must be reconstructible
-from that section's own digits** — either as a contiguous run, or as two runs
-joined, which is exactly what a wrapped cell is. A section whose repair cannot
-be proved keeps its raw verbatim text.
-
-Result: 85 repaired, **81 verified and used**, 4 kept raw.
-
-**Output:** `work2/notice_fixed.json`
-
----
-
-## Stage 4 shared — `pipeline/descriptions.py` — 75 lines
-
-Loads `item_desc.xlsx` and maps its 22 rows onto the 21 parameters.
-
-The mapping is **explicit, not positional** — the spreadsheet is in the
-department's order rather than A/B/C order, and its row 16 has no sheet. It is
-asserted against `params.py` on import, so a wrong id fails loudly instead of
-silently mis-describing an entire sheet.
-
-`brief(pid)` returns the title plus the description, which is what the reply
-prompt shows the model.
-
----
-
-## Stage 4 — `pipeline/reply_llm.py` — 384 lines
-
-**Finds the taxpayer's answer to each defect the notice raised.** The only
-stage where the model decides anything about meaning.
-
-Keyword matching cannot work here. Taxpayers reproduce a heading when they feel
-like it and otherwise write "Query No:2", or nothing at all.
-
-**Choosing which reply file to read.** Ranked by how much a file *argues*
-(reply phrases per thousand characters), not by size. One case has a 289-page
-`Annexure A to G` whose digit ratio is low — ledger rows are mostly words — so
-it wins on length every time and contains no argument at all. Each document is
-capped at 1,200 lines: a ninety-page reply is four pages of argument followed by
-its evidence, and paying the model to read the evidence buys nothing but
-latency. This one change cut the stage from 140 model calls to 63.
-
-**Four guards keep the answers honest:**
-
-1. **Id fencing.** The model is offered only the parameters that case's own
-   notice raised, and an id outside that list is dropped **by the parser**, not
-   merely forbidden in the prompt. A reply can never invent a defect the
-   department never raised.
-2. **Figure check.** Every 4-to-12-digit figure the model writes must exist in
-   the source document, compared on bare digits because the source wraps long
-   cells mid-number.
-3. **Grounding check.** Runs of five words in the answer must appear in the
-   reply document — at least 55% of them. This exists *because* the model is now
-   given descriptions: the tempting failure is to paraphrase a description into
-   a reply the taxpayer never filed, and no figure check would catch that. Prose
-   lifted from the document scores near 1.0; prose composed by the model scores
-   near 0.
-4. **Line spans.** Every answer also reports the lines it came from.
-
-**The failure ladder**, which is what makes the column trustworthy:
-
-| Situation | What the cell shows |
-|---|---|
-| passes both checks | the model's tidied wording |
-| fails a check, has a line span | that **verbatim slice** of the reply |
-| fails a check, no usable span | **`No reply`** |
-| defect never returned | **`No reply`** |
-
-Ungrounded prose cannot reach the workbook. The worst case is verbatim text, and
-the fallback of the fallback is silence.
-
-**Output:** `work2/reply.json` — 102 answers found, 140 `No reply`, 2 fell back
-to verbatim.
-
----
-
-## Stage 5 — `pipeline/build2.py` — 222 lines
-
-Writes the workbook.
-
-- A **Contents** sheet: every parameter with its row count, replies and `No reply` count.
-- **21 sheets**, one per parameter — including the two that no notice raised, which
-  carry a note. An empty sheet says "not raised"; a missing sheet looks like a
-  pipeline that lost it.
-- Columns: `GSTIN | Trade name | Notice (SCN) defect | Taxpayer reply | Officer finding`.
-
-The notice is the **spine**: a company appears on a sheet only if its own DRC-01
-raised that parameter, so no row can exist without a defect.
-
-Menlo 9pt on the three text columns — the notice tables hold their shape only
-while the column padding is preserved, and a proportional font destroys it.
-Model-returned tables are re-padded the same way so both look alike. Control
-characters are stripped, since a single one aborts the entire save.
-
-**Output:** `register_21-22.xlsx`
-
----
-
-## Stage 6 — `pipeline/verify2.py` — 145 lines
-
-Refuses to bless the workbook unless every one of these holds. Each check exists
-because that class of mistake has already been made once.
-
-| Check | What it prevents |
-|---|---|
-| notice cells verbatim | a notice cell that is not a literal run of lines from that case's own PDF |
-| nothing from below the Summary line | the recap or forty pages of annexure leaking into a defect cell |
-| no empty notice cell | a row with nothing in the spine column |
-| only the 21 parameters | a group heading or stray id becoming a sheet |
-| every repaired table is figure-checked | an unproved table repair being shown |
-| every reply cell grounded | model prose that passed neither check reaching a cell |
-| no reply for a defect never raised | id fencing having failed silently |
-| scanned-page figures seen by tesseract too | a figure invented during vision OCR |
-| coverage floors | a partial re-run silently producing a smaller workbook that still looks fine |
-
-Exits non-zero on any failure.
-
----
-
-# 3. Running it
-
-### The environment
-
-The login node ships no poppler and no tesseract, so they live in a dedicated
-conda environment. **Created and verified:**
-
-```
-<home>/.conda/envs/gst
-  python      3.12.13
-  openpyxl    3.1.5
-  pdftotext   26.07.0     (poppler)
-  pdftoppm    26.07.0     (poppler)
-  tesseract   5.5.3
-```
-
-If it ever needs rebuilding:
+Verify before going further:
 
 ```bash
-conda create -y -n gst -c conda-forge python=3.12 poppler tesseract openpyxl
+./env/bin/python -V                                   # Python 3.12.x
+ls ./env/bin/{pdftotext,pdftoppm,pdfinfo,tesseract}   # all four must exist
+./env/bin/python -c "import openpyxl; print(openpyxl.__version__)"
 ```
 
-Note the path — `~/.conda/envs/gst`, the user's conda directory, **not**
-`~/<workdir>/miniconda/envs/`, which is where the system conda base lives.
+`micromamba`, not `conda`, for a reason: a named conda environment (`-n gst`)
+always lands in `~/.conda/envs` and its package cache in `~/.conda/pkgs`, and on
+a host where the home directory is off limits that is a problem you find out
+about after a gigabyte has been written. micromamba writes only under
+`MAMBA_ROOT_PREFIX`, which `env.sh` points inside the checkout.
 
-### The command
+---
+
+## 4. Running it
+
+Every new shell starts the same way:
 
 ```bash
-cd ~/<workdir>/para-separator-demo
-export GST_API_URL=http://<gpu-node>:8033/v1
-PY=~/.conda/envs/gst/bin/python bash run.sh
+cd <project>
+source env.sh
+
+export GST_API_URL="https://api.jaypokale.me/v1"
+export GST_API_KEY="sk-..."
+export GST_MODEL="Qwen/Qwen3.6-27B-FP8"
 ```
 
-The key is read from `.gst_api_key`, so nothing secret is typed. Note vLLM
-listens on **<gpu-node>**, not the login node — nothing answers on
-`localhost:8033` there.
-
-Equivalently, activating the environment sets `PATH` itself:
+Prove the endpoint answers before spending a run on it:
 
 ```bash
-conda activate gst
-export GST_API_URL=http://<gpu-node>:8033/v1
-bash run.sh
+curl -s -m 20 -o /dev/null -w 'HTTP=%{http_code} in %{time_total}s\n' \
+  "$GST_API_URL/chat/completions" \
+  -H "Authorization: Bearer $GST_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"'"$GST_MODEL"'","messages":[{"role":"user","content":"hi"}],"max_tokens":3}'
 ```
 
-Full run from the PDFs is roughly 35 minutes, dominated by OCR. With `work2/`
-already present, `bash run.sh build` produces the workbook in seconds.
+`HTTP=200` is the only acceptable answer. `HTTP=000` means the endpoint is not
+reachable from this host — a network problem, not a pipeline problem.
 
-To demonstrate a single stage — this one uses no model at all, and is the
-clearest thing to show:
+### One case, printed
+
+```bash
+bash demo.sh "$PWD/Reply_WO_Parameter_Wise/33AABCK5176D1ZT_GSTR9_Np"
+bash demo.sh 33AABCK5176D1ZT                    # by GSTIN, searched in the datasets
+bash demo.sh <case> --full                      # whole cells, not a 1200-char preview
+bash demo.sh                                    # list the cases available
+```
+
+It needs nothing prepared — no inventory, no caches, no dataset configuration —
+and writes no shared state, so a demo run cannot disturb a finished register.
+About 60 seconds for a native-text case; a scanned reply adds roughly 15 seconds
+a page the first time.
+
+### A whole folder, to Excel
+
+```bash
+bash run.sh "$PWD/Reply_WO_Parameter_Wise"
+# -> Reply_WO_Parameter_Wise/Reply_WO_Parameter_Wise.xlsx
+
+bash run.sh "$PWD/Reply_WO_Parameter_Wise" build   # rebuild the workbook only
+bash run.sh                                         # the built-in Notices_21-22 dataset
+```
+
+The workbook is written **into the folder** and named after it, and the caches go
+to `work2/<folder name>/`, so two datasets never overwrite each other's text, OCR
+or replies.
+
+A case folder is expected to hold a notice subfolder and a reply subfolder. The
+names `DRC01_SCN` / `DRC 01 Reply` / `DRC 01 Order` are matched first; anything
+else falls back to a loose match on *reply*, *order*, *notice/SCN/DRC-01*, so a
+folder that arrives named differently still runs.
+
+Roughly 35 minutes for 42 cases from cold, dominated by OCR. With `work2/`
+already present, `build` produces the workbook in seconds.
+
+### Stage by stage
+
+Every stage is resumable and cached, so re-running costs nothing for work already
+done. To run one on its own:
 
 ```bash
 cd pipeline
-python scn_split.py 33AAACC0460H1Z9
+export GST_DATA="$PWD/../Reply_WO_Parameter_Wise" GST_WORK="$PWD/../work2/Reply_WO_Parameter_Wise"
+../env/bin/python inventory2.py
+../env/bin/python text2.py [GSTIN]
+../env/bin/python vlm_ocr.py [GSTIN]
+../env/bin/python scn_split.py
+../env/bin/python notice_tables.py
+../env/bin/python reply_llm.py [GSTIN]
+../env/bin/python build2.py [name]
+../env/bin/python verify2.py
 ```
+
+---
+
+## 5. Environment variables
+
+| variable | default | what it does |
+|---|---|---|
+| `GST_API_URL` | `https://api.jaypokale.me/v1` | OpenAI-compatible endpoint |
+| `GST_API_KEY` | `.gst_api_key`, then `~/.gst_api_key` | never passed as an argument, so it stays out of shell history |
+| `GST_MODEL` | `Qwen/Qwen3.6-27B-FP8` | the text model |
+| `GST_DATA` | `Notices_21-22/Proper order_Adj` | folder of case folders |
+| `GST_WORK` | `work2` | caches and intermediate JSON |
+| `GST_OUT` | `register_21-22` | workbook basename |
+| `GST_OUT_DIR` | repo root | where the workbook is written |
+| `GST_VLM_URL` / `GST_VLM_MODEL` / `GST_VLM_KEY` | the main endpoint | vision endpoint, when OCR needs a different model from the text stage |
+| `GST_SKIP_VLM` | unset | skip vision OCR entirely; the scans keep tesseract's read |
+| `GST_MAX_TOKENS` | `12000` | output budget per reply call |
+| `GST_MIN_CHARS_PAGE` | `600` | below this a PDF is treated as a scan |
+| `GST_MIN_GROUND` | `0.55` | how much of a model's answer must appear in the source |
+| `GST_THINK` | off | ask the model to reason before answering |
+| `GST_JSON_MODE` | off | constrain decoding to valid JSON |
+| `PY` | `python3` | the interpreter; `env.sh` sets it to `./env/bin/python` |
+
+The last four exist for comparing models and should stay unset for a normal run.
+
+---
+
+## 6. The files
+
+### `run.sh` — the whole pipeline
+
+Takes an optional dataset folder, resolves it to an absolute path **before**
+changing directory, derives the workbook name from the folder name, and runs the
+stages in order.
+
+It also does two things that look incidental and are not:
+
+- **It derives `PATH` from the interpreter.** The stages shell out to
+  `pdftotext`, `pdftoppm` and `tesseract`. Setting `PY` at an interpreter whose
+  environment holds those binaries, without putting its `bin` on `PATH`, once
+  produced a silent full run in which every document extracted to zero characters
+  and the empty results were cached. It now refuses to start if a binary is
+  missing.
+- **It relocates the scratch directory.** OCR renders every page to PNG before
+  reading it, which is gigabytes for a long scan. If `/tmp` has under 2 GB free —
+  on a shared node it was 100% full of other people's data, and `pdftoppm` failed
+  on every scanned PDF with nothing but a non-zero exit status — it uses
+  `work2/tmp` instead.
+
+Vision OCR is treated as optional: an endpoint that cannot take images makes the
+stage warn and carry on rather than killing the run, because it is an improvement
+on tesseract's read, not a prerequisite for it.
+
+### `demo.sh` / `pipeline/demo_case.py` — one case, printed
+
+The same stages against a single folder, printing each defect with the taxpayer's
+answer beside it instead of writing a workbook. `demo.sh` absolutises its
+arguments before `cd`-ing into `pipeline/`; `demo_case.py` accepts a path, a
+folder name or a GSTIN, matches subfolders loosely, repairs the notice tables
+concurrently, and prints a 1,200-character preview per cell unless `--full`.
+
+Role matching order matters here: every subfolder in this corpus is called "DRC
+01 something", so *order* is tested before the generic DRC-01 pattern. Getting
+that wrong read the adjudication order as the notice.
+
+### `env.sh` — keeps everything inside the checkout
+
+Sets `CONDA_PKGS_DIRS`, `CONDA_ENVS_DIRS`, `MAMBA_ROOT_PREFIX`, `PIP_CACHE_DIR`,
+`XDG_*`, `MPLCONFIGDIR`, `HF_HOME`, `TMPDIR`, `PY` and `PATH`, then prints what it
+resolved. Source it before anything else. It only sets variables — nothing is
+created until you run something.
+
+`CONDA_ENVS_PATH` is explicitly unset: micromamba aborts outright if both it and
+`CONDA_ENVS_DIRS` are set.
+
+### `pipeline/paths.py` — where everything lives
+
+Resolves the six `GST_*` path variables, holds the role-subfolder names, and
+provides `role_dirs()`, which matches the conventional names first and falls back
+to the loose match for any role they miss.
+
+### `pipeline/params.py` — the 21 parameters
+
+From `Parameters_TN.pdf`: A1–A6 under-declaration, B1–B10 excess ITC, C1–C5
+interest and late fee. `match_heading` compares on a *squashed* form — lowercase,
+all non-alphanumerics removed — so it absorbs the stray spaces `pdftotext` leaves
+inside words. `BOUNDARY` holds group headings such as "Excess claim of ITC",
+which end a section but get no sheet of their own.
+
+### `pipeline/descriptions.py` — what each parameter means
+
+Maps the rows of `item_desc.xlsx` to the 21 ids and hands the model a
+plain-English description alongside the official title, because a bare title is
+thin evidence for recognising an answer that never names the defect. The mapping
+is asserted on import, so a changed spreadsheet fails loudly instead of silently
+mislabelling.
+
+### `pipeline/inventory2.py` — stage 1
+
+Walks the case folders and records every PDF with its size, page count and
+**subfolder**. The subfolder is recorded rather than assumed, because it is only
+the conventional name when the folder follows the convention.
+
+The notice file is chosen by size — the signed DRC-01 is around 1 MB against a
+42 kB portal covering form, verified on all seven multi-PDF notice folders. The
+reply file cannot be chosen that way and is not chosen here at all: one case has a
+289-page "Annexure A to G" that dwarfs the four-page reply beside it, and another
+has a 2-character scan as its largest file.
+
+### `pipeline/text2.py` — stage 2
+
+`pdftotext -layout` first, because the department's tables survive only while the
+column spacing is intact. A PDF that yields under `GST_MIN_CHARS_PAGE` characters
+a page, or whose text is mostly control characters, is re-read with `pdftoppm -r
+300` + `tesseract`, and the result is cached because it is the slow step.
+
+Two thresholds here were learned the hard way:
+
+- **600 characters a page, not 100.** A ten-page reply extracted at 251
+  characters a page and passed as native text, because its covering letter has a
+  text layer and the reply letter behind it is a photograph. What reached the
+  model was a list of annexure titles, and the case was recorded as "No reply"
+  against a reply that was in the file all along. Across all 49 reply files the
+  two mixed documents sit at 251 and 302 characters a page and the next file up is
+  at 1206, so 600 is inside a wide gap.
+- **Compare letters, not length.** One PDF returned 39,592 characters of which
+  four were letters. The garbled-text check fired, OCR ran — and the fallback kept
+  the junk because it was longer.
+
+### `pipeline/vlm_ocr.py` — stage 2b
+
+Re-reads the scans with a vision model, because tesseract gets the words but
+destroys the tables, and a GST reply is mostly tables. 150 dpi PNG per page,
+six pages in flight.
+
+tesseract's read is **kept**, as `<name>.tess.txt`, and used as an independent
+witness. A generative model told to transcribe will invent rather than emit
+nothing: on one 26-page scan it reached a page it could not read and produced a
+calculus chapter followed by an NGO income statement, which then passed every
+downstream check, because by that point the invention *was* the source document.
+So each page is judged — a model answer far longer than tesseract's read of the
+same image, with almost no 3-word runs in common, is discarded in favour of
+tesseract, and a page the model filled with prose where tesseract saw nothing is
+dropped entirely. The prompt also tells it to return `<<BLANK>>` for a page it
+cannot read.
+
+### `pipeline/scn_split.py` — stage 3, no model
+
+Walks the notice line by line, opens a section on a parameter heading, closes it
+at the next heading or group heading, and **stops the document dead** at
+`Summary :` or "The total tax payable on account of these deficiencies". The two
+notices with no Summary line fall back to a legibility heuristic.
+
+`trade_name()` handles four different header layouts — letter style,
+label-then-value, value-then-label, and name-only-in-the-subject-line — and
+rejects labels and GSTINs. The first version returned a blank name for 41 of 42
+cases.
+
+### `pipeline/notice_tables.py` — stage 3b
+
+The department's tables are wider than the page, so a cell wraps and one figure
+arrives as two. This asks the model to rebuild the table, then **re-checks every
+figure against the raw text**: each must be a contiguous digit run in the source,
+or two runs joined — which is exactly what a wrapped cell is. A table that fails
+keeps its raw text rather than showing a repaired figure nobody verified.
+
+### `pipeline/reply_llm.py` — stage 4, the only stage that judges meaning
+
+Picks the arguing file (a phrase-density score, not size), caps it at 1,200
+lines, windows it at 500 lines with 50 of overlap, and asks for the answer to each
+id that case's notice raised.
+
+Then it checks the answer: every 4–12 digit figure must exist in the source, and
+the wording must overlap it. A cell that fails falls back to the verbatim slice
+the model pointed at; one with nothing to fall back on becomes `No reply`.
+
+Several defences here exist because their absence caused real, silent damage:
+
+- **12,000 output tokens.** At 4,000 the JSON was cut off mid-table, `json.loads`
+  failed, and 15 of 48 documents silently produced zero items — every one read as
+  "No reply".
+- **`salvage()`**, which recovers complete objects from a truncated answer, and
+  tries every closed object rather than only the outermost, since a cut inside the
+  items array leaves the outer brace open.
+- **Trailing-comma tolerance.** A comma before a closing brace is invalid JSON
+  and entirely normal model output; rejecting the response whole turned three
+  correctly-read documents into 19 defects and 19 "No reply".
+- **Single-case runs persist.** `reply_llm.py <GSTIN>` used to print its result
+  and return, caching nothing, so the obvious repair — fix a document, re-run that
+  case, rebuild — produced a workbook still built from the stale result.
+
+### `pipeline/build2.py` — stage 5
+
+21 sheets plus a Contents sheet. A case appears on a sheet only if the **notice**
+raised that parameter, so there is no row without a defect. Text columns are
+Menlo 9pt, so the `-layout` tables stay aligned. Repaired tables are used only
+where they were figure-checked. Control characters are stripped, because a single
+one aborts the whole save.
+
+### `pipeline/verify2.py` — stage 6, fails loud
+
+- every notice cell is a literal substring of its cached source text
+- nothing from below the Summary line reached a cell
+- no row exists whose notice cell is empty
+- only the 21 parameters appear
+- every repaired table used was figure-checked
+- every reply cell is verified model text, a verbatim fallback, or `No reply`
+- no reply for a defect the notice never raised
+- figures in a scanned-page reply were seen by tesseract too
+- coverage floors: case and cell counts, against **this dataset's own best run**
+  at 90%, remembered in `work2/<name>/coverage.json`. A first run has nothing to
+  fall short of, and only a clean run raises the mark.
+
+### `pipeline/qwen.py` — the model client
+
+One streamed completion, thinking off. Streaming is not cosmetic: Cloudflare
+fronts the public endpoint and kills a connection that has sent nothing for about
+100 seconds, so every request long enough to matter died with HTTP 524. It also
+403s the default Python user agent, hence the explicit header. `strip_think()`
+removes `<think>` blocks from models that reason inline, including an unclosed one
+left by a truncated answer.
+
+### `item_desc.xlsx`, `Parameters_TN.pdf`
+
+The parameter descriptions the reply stage feeds the model, and the source
+document the 21 parameters were taken from. `item_desc.xlsx` is the only workbook
+in the repository, because the pipeline reads it.
+
+### `web/`
+
+A separate, unrelated tool: a single static page that turns one signed DRC-07
+order into a three-column para-wise statement in the browser. It has its own
+README. Nothing in the batch pipeline uses it.
+
+---
+
+## 7. Datasets and generated directories
+
+Case documents are **not** in git — they are taxpayer records, and the largest
+corpus is 3.8 GB. Copy them in beside the code:
+
+```bash
+# run this on your own machine, not on the server
+rsync -avh --progress "Reply_WO Parameter Wise/" \
+  <user>@<host>:'<project>/Reply_WO_Parameter_Wise/'
+```
+
+| directory | what it holds | safe to delete? |
+|---|---|---|
+| `work2/<name>/text/` | extracted and OCRed text, `.ocr` / `.vlm` flags, `.tess.txt` witnesses | yes, but OCR is then paid again |
+| `work2/<name>/inventory.json` | every PDF with size, pages, subfolder | yes |
+| `work2/<name>/scn.json` | the notice split, verbatim slices | yes |
+| `work2/<name>/notice_fixed.json` | repaired notice tables | yes |
+| `work2/<name>/reply_cache/` | one JSON per case, the resumable unit | yes, but the model runs again |
+| `work2/<name>/reply.json` | merged replies, what the workbook is built from | yes |
+| `work2/<name>/coverage.json` | best case and cell counts seen | yes, resets the floor |
+| `tmp/` | OCR page renders | yes, always |
+| `env/`, `.conda/`, `.cache/` | interpreter and package caches | `.conda/` after setup |
+
+---
+
+## 8. When something goes wrong
+
+| symptom | cause and fix |
+|---|---|
+| `Command 'conda' not found` | use `./bin/micromamba` — see section 3 |
+| micromamba: "`CONDA_ENVS_DIRS` and `CONDA_ENVS_PATH` are both set" | old `env.sh`; `git pull` |
+| `ERROR: not on PATH: pdftotext ...` | `source env.sh` first, or the environment was built without poppler |
+| every document extracts to 0 characters | `PY` set without its `bin` on `PATH`; `run.sh` now refuses to start instead |
+| `pdftoppm` fails on every scan | scratch directory full; `run.sh` relocates it to `work2/tmp` under 2 GB free |
+| run stops at stage 2b, "is not a multimodal model" | the endpoint has no vision model; set `GST_VLM_URL`, or `GST_SKIP_VLM=1` |
+| `HTTP=000` from the curl check | endpoint unreachable from this host — network, not pipeline |
+| a case reads "No reply" but the PDF has one | check chars-per-page: under 600 it is a scan and needs OCR; over, the model missed it |
+| re-running one case changes nothing | fixed — single-case runs now write their cache and merge into `reply.json` |
+| `verify2.py` fails a coverage floor | a re-run collapsed against this dataset's own best; look at what changed before rebuilding |
+
+---
+
+## 9. Which model to use
+
+Qwen3.6-27B-FP8 is the default and, on this material, the right answer. Measured
+over the full 42-case corpus, 242 notice defects:
+
+| | Qwen3.6-27B | sarvam-105b-fp8 |
+|---|---|---|
+| defects answered | **213 (88%)** | 142 (59%) |
+| mean reply cell | **~2,500 characters** | ~440 characters |
+| vision / OCR | yes | not a multimodal model |
+| JSON output | valid | unclosed arrays, stray tokens |
+| same request twice | stable | 11, then 15, then 15 answered |
+
+The gap is not knowledge. The task needs faithful copying, exact span boundaries
+and strict output format, and on a sample cell sarvam returned the parameter's
+own heading — 65 characters — where Qwen returned the taxpayer's full 10,215
+character argument from the same document. Raising sarvam's token budget makes it
+worse: at 48,000 tokens it emitted 1.46 million characters of reasoning and never
+answered.

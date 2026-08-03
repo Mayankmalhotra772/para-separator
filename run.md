@@ -11,14 +11,14 @@ Copy the commands exactly as they are. Lines starting with `#` are notes, not co
 
 ## Every time you open a new terminal window
 
-Do this first, once per window. Nothing works without it.
+Do this first, once per window. Nothing works witȟout it.
 
 ```bash
 cd ~/Subbareddy/para-separator
 source env.sh
 
 export GST_API_URL="http://localhost:8002/v1"
-export GST_API_KEY="PASTE_THE_KEY_HERE"
+export GST_API_KEY="YOUR API KEY"
 export GST_MODEL="qwen-122b"
 ```
 

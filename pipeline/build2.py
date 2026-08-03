@@ -27,6 +27,7 @@ from paths import WORK, OUT_NAME, OUT_DIR
 from params import PARAMS, SHEET_NAME, TITLE
 
 NO_REPLY = "No reply"
+NO_FINDING = "No finding"
 
 MONO = Font(name="Menlo", size=9)
 HEAD_FONT = Font(name="Helvetica Neue", size=10, bold=True, color="FFFFFF")
@@ -39,7 +40,7 @@ TOP_WRAP = Alignment(vertical="top", wrap_text=True)
 
 COLS = [("GSTIN", 20), ("Trade name", 30),
         ("Notice (SCN) defect", 95), ("Taxpayer reply", 85),
-        ("Officer finding", 30)]
+        ("Verdict", 16), ("Officer finding", 80)]
 
 MAX_CELL = 30000        # Excel's own limit is 32767
 MAX_ROW_HEIGHT = 409    # Excel's own limit
@@ -99,10 +100,23 @@ def reply_cell(rec):
     return ("\n\n".join(p for p in parts if p).strip() or NO_REPLY)[:MAX_CELL]
 
 
+def order_cell(rec):
+    """The officer's finding, and separately the verdict it supports."""
+    if not rec or rec.get("no_finding"):
+        return "", NO_FINDING
+    verdict = rec.get("verdict") or "unclear"
+    if not rec.get("verified", True) and rec.get("fallback_text"):
+        return verdict, rec["fallback_text"][:MAX_CELL]
+    parts = [rec["text"]] if rec.get("text") else []
+    parts += [render_table(t) for t in rec.get("tables") or []]
+    body = "\n\n".join(p for p in parts if p).strip()
+    return (verdict, body[:MAX_CELL]) if body else ("", NO_FINDING)
+
+
 def est_height(*cells):
     """Roughly how tall the row needs to be, capped."""
     lines = 0
-    for c, width in zip(cells, (95, 85)):
+    for c, width in zip(cells, (95, 85, 80)):
         for line in str(c).splitlines() or [""]:
             lines += max(1, -(-len(line) // width))
     return min(MAX_ROW_HEIGHT, max(30, lines * 11.5))
@@ -126,7 +140,7 @@ def add_sheet(wb, pid, rows):
 
     for n, r in enumerate(rows):
         ws.append([r["gstin"], safe(r["trade_name"]), safe(r["scn"]),
-                   safe(r["reply"]), ""])
+                   safe(r["reply"]), r["verdict"], safe(r["order"])])
         row = ws.max_row
         for i in range(1, len(COLS) + 1):
             cell = ws.cell(row=row, column=i)
@@ -135,7 +149,8 @@ def add_sheet(wb, pid, rows):
             cell.font = MONO if i >= 3 else META_FONT
             if n % 2:
                 cell.fill = ALT_FILL
-        ws.row_dimensions[row].height = est_height(r["scn"], r["reply"])
+        ws.row_dimensions[row].height = est_height(r["scn"], r["reply"],
+                                                   r["order"])
 
     for i, (_, w) in enumerate(COLS, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
@@ -149,21 +164,23 @@ def contents(wb, tally, total_rows):
     ws.cell(row=1, column=1).font = Font(name="Helvetica Neue", size=14, bold=True,
                                          color="1F3864")
     ws.append([])
-    ws.append(["Sheet", "Parameter", "Companies", "Replies", "No reply"])
-    for i in range(1, 6):
+    ws.append(["Sheet", "Parameter", "Companies", "Replies", "No reply",
+               "Findings", "No finding"])
+    for i in range(1, 8):
         h = ws.cell(row=3, column=i)
         h.font, h.fill, h.border = HEAD_FONT, HEAD_FILL, BOX
         h.alignment = Alignment(vertical="center", horizontal="center")
     for pid, _, title, _ in PARAMS:
-        n, answered = tally.get(pid, (0, 0))
-        ws.append([SHEET_NAME[pid], title, n, answered, n - answered])
-        for i in range(1, 6):
+        n, answered, decided = tally.get(pid, (0, 0, 0))
+        ws.append([SHEET_NAME[pid], title, n, answered, n - answered,
+                   decided, n - decided])
+        for i in range(1, 8):
             ws.cell(row=ws.max_row, column=i).font = META_FONT
     ws.append([])
     ws.append(["", "Total rows", total_rows])
     ws.cell(row=ws.max_row, column=2).font = Font(name="Helvetica Neue", size=10,
                                                   bold=True)
-    for i, w in enumerate((26, 60, 12, 12, 12), start=1):
+    for i, w in enumerate((26, 60, 12, 12, 12, 12, 12), start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A4"
 
@@ -173,6 +190,8 @@ def main():
     scn = json.loads((WORK / "scn.json").read_text())
     rpath = WORK / "reply.json"
     reply = json.loads(rpath.read_text()) if rpath.exists() else {}
+    opath = WORK / "order.json"
+    order = json.loads(opath.read_text()) if opath.exists() else {}
     fpath = WORK / "notice_fixed.json"
     fixed = json.loads(fpath.read_text()) if fpath.exists() else {}
 
@@ -187,10 +206,14 @@ def main():
             if not sec:
                 continue                      # no notice defect, no row
             rec = (reply.get(gstin, {}).get("params") or {}).get(pid)
+            orec = (order.get(gstin, {}).get("params") or {}).get(pid)
+            verdict, finding = order_cell(orec)
             rows.append({"gstin": gstin,
                          "trade_name": scn[gstin]["trade_name"],
                          "scn": notice_cell(sec, (fixed.get(gstin) or {}).get(pid)),
-                         "reply": reply_cell(rec)})
+                         "reply": reply_cell(rec),
+                         "verdict": verdict,
+                         "order": finding})
         # A parameter no notice in this corpus raised still gets its sheet, so
         # the workbook always has all 21 - an empty sheet says "not raised",
         # a missing sheet looks like a pipeline that lost it.
@@ -199,19 +222,22 @@ def main():
             ws.cell(row=3, column=1,
                     value="No notice in this dataset raised this parameter.")
             ws.cell(row=3, column=1).font = META_FONT
-            tally[pid] = (0, 0)
+            tally[pid] = (0, 0, 0)
             continue
         answered = sum(1 for r in rows if r["reply"] != NO_REPLY)
-        tally[pid] = (len(rows), answered)
+        decided = sum(1 for r in rows if r["order"] != NO_FINDING)
+        tally[pid] = (len(rows), answered, decided)
         total += len(rows)
 
     contents(wb, tally, total)
     out = OUT_DIR / f"{name}.xlsx"
     wb.save(out)
 
-    ans = sum(a for _, a in tally.values())
+    ans = sum(a for _, a, _ in tally.values())
+    dec = sum(d for _, _, d in tally.values())
     print(f"{out.name}: {len(tally)} sheets, {total} rows, "
-          f"{ans} with a reply, {total - ans} '{NO_REPLY}'")
+          f"{ans} with a reply, {total - ans} '{NO_REPLY}', "
+          f"{dec} with a finding")
     for pid, _, title, _ in PARAMS:
         if pid in tally:
             n, a = tally[pid]

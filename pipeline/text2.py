@@ -112,13 +112,16 @@ def extract(pdf, npages, dest):
 def jobs_for(case):
     out = []
     for role, sub in ROLES.items():
-        if role == "order":
-            continue                     # column 3 stays empty for now
         for f in case["roles"][role]:
             # For the notice only the biggest file is ever read; for the reply
             # every file is, because which one carries the argument is not
             # knowable before the text exists.
             if role == "scn" and f["file"] != case["scn_file"]:
+                continue
+            # The adjudication order follows the notice's rule, not the reply's:
+            # where a case has several, the signed order is the large one and
+            # the rest are portal summary forms.
+            if role == "order" and f is not case["roles"]["order"][0]:
                 continue
             out.append((case["gstin"], case["folder"], role, f["file"],
                         f.get("dir") or ROLES[role], f["pages"]))

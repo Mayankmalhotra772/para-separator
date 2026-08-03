@@ -125,6 +125,10 @@ if [ "$STAGE" = "all" ]; then
     echo
     echo "=== 4. reply extraction (Qwen, ids limited to that notice) ==="
     $PY reply_llm.py || exit 1
+
+    echo
+    echo "=== 4b. the officer's finding on each defect ==="
+    $PY order_llm.py || exit 1
 fi
 
 echo

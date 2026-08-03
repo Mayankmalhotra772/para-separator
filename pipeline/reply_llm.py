@@ -308,8 +308,14 @@ def parse(raw, allowed, nlines):
                 if b < a:
                     a = b = None
         if text or tables:
-            out.append({"id": pid, "text": text, "tables": tables,
-                        "lines": [a, b] if a else None})
+            rec = {"id": pid, "text": text, "tables": tables,
+                   "lines": [a, b] if a else None}
+            # The order stage asks the same parser for one field more. Carrying
+            # it here rather than duplicating the parser keeps one set of rules
+            # about ids, spans and malformed JSON.
+            if it.get("verdict") is not None:
+                rec["verdict"] = it["verdict"]
+            out.append(rec)
     return out
 
 

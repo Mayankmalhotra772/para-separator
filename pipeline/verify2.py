@@ -29,6 +29,13 @@ from params import REPORTED
 
 NO_REPLY = "No reply"
 
+# The four verdicts order_llm may record, and the giveaway phrases of the two
+# voices that are not the officer's.
+VERDICTS = {"dropped", "confirmed", "partly confirmed", "unclear"}
+RECITAL = re.compile(r"(?i)(it is proposed to be (taxed|recovered)|you are hereby"
+                     r"|proposed to assess|we (submit|wish to submit)"
+                     r"|in this regard,? we|kindly drop)")
+
 # The floor is what this dataset reached before, not a number typed in here:
 # the check exists to catch a re-run that silently collapses, and a constant
 # tuned to the 42-case corpus simply fails every smaller folder. The best run so
@@ -131,6 +138,43 @@ def main():
               f"{len(orphan)}: {orphan[:4]}")
         check("scanned-page figures seen by tesseract too", not mismatch,
               f"{len(mismatch)}: {mismatch[:4]}")
+
+    # --- the order side
+    opath = WORK / "order.json"
+    order = json.loads(opath.read_text()) if opath.exists() else {}
+    if not order:
+        print("\n  (no order.json yet - run order_llm.py)")
+    else:
+        o_ungrounded, o_orphan, o_verdict, o_recital = [], [], [], []
+        for gstin, case in order.items():
+            allowed = set(scn.get(gstin, {}).get("params", {}))
+            for pid, rec in (case.get("params") or {}).items():
+                if pid not in allowed:
+                    o_orphan.append(f"{gstin}/{pid}")
+                if rec.get("no_finding"):
+                    continue
+                if not rec.get("verified") and not rec.get("fallback_text"):
+                    o_ungrounded.append(f"{gstin}/{pid}")
+                # A verdict the officer's own words do not carry is a guess, and
+                # a guess about whether a demand stands is the worst cell in the
+                # workbook to get wrong.
+                if rec.get("verdict") not in VERDICTS:
+                    o_verdict.append(f"{gstin}/{pid}:{rec.get('verdict')}")
+                # The order prints the notice and the reply under the same
+                # heading as the finding. A cell in either of those voices is
+                # the wrong paragraph, however well grounded it is.
+                body = rec.get("text") or rec.get("fallback_text") or ""
+                if RECITAL.search(body):
+                    o_recital.append(f"{gstin}/{pid}")
+
+        check("every finding cell grounded", not o_ungrounded,
+              f"{len(o_ungrounded)}: {o_ungrounded[:4]}")
+        check("no finding for a defect the notice never raised", not o_orphan,
+              f"{len(o_orphan)}: {o_orphan[:4]}")
+        check("every verdict is one of the four", not o_verdict,
+              f"{len(o_verdict)}: {o_verdict[:4]}")
+        check("no finding cell is the notice or the reply recited",
+              not o_recital, f"{len(o_recital)}: {o_recital[:4]}")
 
     # --- coverage floors, against this dataset's own best run
     ncells = sum(len(c["params"]) for c in scn.values())

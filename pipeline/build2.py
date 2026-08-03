@@ -40,7 +40,7 @@ TOP_WRAP = Alignment(vertical="top", wrap_text=True)
 
 COLS = [("GSTIN", 20), ("Trade name", 30),
         ("Notice (SCN) defect", 95), ("Taxpayer reply", 85),
-        ("Verdict", 16), ("Officer finding", 80)]
+        ("Officer finding", 80)]
 
 MAX_CELL = 30000        # Excel's own limit is 32767
 MAX_ROW_HEIGHT = 409    # Excel's own limit
@@ -101,16 +101,20 @@ def reply_cell(rec):
 
 
 def order_cell(rec):
-    """The officer's finding, and separately the verdict it supports."""
+    """The officer's finding, in the officer's own words.
+
+    The verdict order_llm derives is not shown. It is still computed, because
+    refusing a verdict the passage does not support is how a cell written in the
+    notice's voice gets caught before it reaches the workbook.
+    """
     if not rec or rec.get("no_finding"):
-        return "", NO_FINDING
-    verdict = rec.get("verdict") or "unclear"
+        return NO_FINDING
     if not rec.get("verified", True) and rec.get("fallback_text"):
-        return verdict, rec["fallback_text"][:MAX_CELL]
+        return rec["fallback_text"][:MAX_CELL]
     parts = [rec["text"]] if rec.get("text") else []
     parts += [render_table(t) for t in rec.get("tables") or []]
     body = "\n\n".join(p for p in parts if p).strip()
-    return (verdict, body[:MAX_CELL]) if body else ("", NO_FINDING)
+    return body[:MAX_CELL] if body else NO_FINDING
 
 
 def est_height(*cells):
@@ -140,7 +144,7 @@ def add_sheet(wb, pid, rows):
 
     for n, r in enumerate(rows):
         ws.append([r["gstin"], safe(r["trade_name"]), safe(r["scn"]),
-                   safe(r["reply"]), r["verdict"], safe(r["order"])])
+                   safe(r["reply"]), safe(r["order"])])
         row = ws.max_row
         for i in range(1, len(COLS) + 1):
             cell = ws.cell(row=row, column=i)
@@ -207,12 +211,11 @@ def main():
                 continue                      # no notice defect, no row
             rec = (reply.get(gstin, {}).get("params") or {}).get(pid)
             orec = (order.get(gstin, {}).get("params") or {}).get(pid)
-            verdict, finding = order_cell(orec)
+            finding = order_cell(orec)
             rows.append({"gstin": gstin,
                          "trade_name": scn[gstin]["trade_name"],
                          "scn": notice_cell(sec, (fixed.get(gstin) or {}).get(pid)),
                          "reply": reply_cell(rec),
-                         "verdict": verdict,
                          "order": finding})
         # A parameter no notice in this corpus raised still gets its sheet, so
         # the workbook always has all 21 - an empty sheet says "not raised",

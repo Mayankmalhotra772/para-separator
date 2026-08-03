@@ -50,18 +50,34 @@ VERDICTS = {"dropped", "confirmed", "partly confirmed", "unclear"}
 # and the guess is the one thing a register must not carry.
 SUPPORTS = {
     "dropped": re.compile(
-        r"(?i)(accept(ing|ed)? the (contention|submission|reply)|proceedings?"
-        r"[^.]{0,40}(conclud|dropp)|is dropped|no further (action|liability)|"
-        r"not sustainable|defect is closed|paid.{0,40}(hence|therefore)|"
-        r"discharged the liability)"),
+        r"(?i)((is|are|be)\s+(hereby\s+)?(dropped|closed|concluded)|"
+        r"accept(ing|ed|s)?\b[^.]{0,40}(contention|submission|reply|taxpayer)|"
+        r"repl(y|ies)[^.]{0,30}(is|was|are)\s+accepted|"
+        r"proceedings?[^.]{0,40}(conclud|dropp)|"
+        r"found (in order|to be satisfactory|satisfactory|correct)|"
+        r"no further (action|liability|proceeding)|not sustainable|"
+        r"discharged the liability|no (dues|demand)[^.]{0,20}(pending|payable))"),
     "confirmed": re.compile(
-        r"(?i)(is confirmed|hereby confirmed|liable to pay|demand[^.]{0,30}"
-        r"confirm|not accept(able|ed)|contention[^.]{0,20}(rejected|not tenable)|"
-        r"payable along with interest|recover(ed|able)|penalty[^.]{0,20}impos)"),
+        r"(?i)((is|are|stands?)\s+(hereby\s+)?confirmed|liable to (pay|reverse)|"
+        r"demand[^.]{0,30}confirm|not accept(able|ed)|"
+        r"contention[^.]{0,20}(rejected|not tenable)|"
+        r"(along with|together with) interest( and penalty)?|"
+        r"recover(ed|able|y)|penalty[^.]{0,20}impos|is payable|"
+        r"under [Ss]ection 73)"),
     "partly confirmed": re.compile(
-        r"(?i)(partly|part of the|to the extent of|remaining|balance amount|"
-        r"however[^.]{0,60}(confirm|payable))"),
+        r"(?i)(partly|part of the|to the extent of|remaining[^.]{0,30}"
+        r"(amount|liab|demand)|balance amount|"
+        r"however[^.]{0,60}(confirm|payable|liable))"),
 }
+
+# The two voices that are not the officer's. The order prints all three under
+# the same heading, and a model that returns the wrong one produces a cell that
+# reads as a decision but is the allegation - "you are hereby liable to pay"
+# labelled "confirmed" when the officer had not yet said anything.
+NOT_THE_OFFICER = re.compile(
+    r"(?i)(it is proposed to be (taxed|recovered)|you are hereby|"
+    r"proposed to assess|therefore,? you are|"
+    r"we (submit|wish to submit)|in this regard,? we|kindly drop)")
 
 SYSTEM = ("You read adjudication orders passed by Indian GST officers. You reply "
           "with JSON only. You copy figures exactly and never invent one. You "
@@ -148,7 +164,11 @@ def heading_hints(lines, allowed):
 
 
 def judge_verdict(word, text):
-    """The verdict the officer's own words support, or 'unclear'."""
+    """The verdict the officer's own words support, or 'unclear'.
+
+    The model's word is kept either way, so a disagreement between what it
+    called the outcome and what the passage says is visible rather than lost.
+    """
     word = str(word or "").strip().lower()
     if word not in VERDICTS:
         return "unclear", False
@@ -182,8 +202,13 @@ def read_order(lines, allowed, label):
             figs_ok, it["bad_figures"] = verify(src, it)
             it["ground"] = round(grounded(it["text"], src), 3)
             it["verified"] = bool(figs_ok and it["ground"] >= MIN_GROUND)
+            it["verdict_model"] = str(it.get("verdict") or "").strip().lower()
             it["verdict"], it["verdict_supported"] = judge_verdict(
                 it.get("verdict"), it["text"])
+            # A passage in the notice's or the taxpayer's voice is the wrong
+            # paragraph however well it is grounded - the order recites both
+            # under the heading the finding also carries.
+            it["is_recital"] = bool(NOT_THE_OFFICER.search(it["text"]))
             it["window"] = s
             out.append(it)
         return out
@@ -193,11 +218,13 @@ def read_order(lines, allowed, label):
         for items in ex.map(window, starts):
             for it in items:
                 cur = found.get(it["id"])
-                # Verified beats unverified; then the later window, because the
-                # decision comes after the two recitals of the same heading.
-                key = (it["verified"], it["window"], len(it["text"]))
-                if cur is None or key > (cur["verified"], cur["window"],
-                                         len(cur["text"])):
+                # Not a recital beats a recital, then verified beats unverified,
+                # then the later window - the decision comes after the two
+                # recitals of the same heading.
+                key = (not it["is_recital"], it["verified"], it["window"],
+                       len(it["text"]))
+                if cur is None or key > (not cur["is_recital"], cur["verified"],
+                                         cur["window"], len(cur["text"])):
                     found[it["id"]] = it
     return found
 
@@ -222,6 +249,12 @@ def run_case(case, scn):
 
     out = {}
     for pid, rec in got.items():
+        # Every candidate for this parameter was a recital. The order says
+        # nothing in the officer's voice about it, and saying so is the honest
+        # answer - better than printing the allegation as though it were the
+        # decision.
+        if rec.get("is_recital"):
+            continue
         if not rec["verified"] and rec["lines"]:
             a, b = rec["lines"]
             rec["fallback_text"] = "\n".join(lines[a - 1:b]).strip()

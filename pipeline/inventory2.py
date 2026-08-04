@@ -9,6 +9,7 @@ reply PDFs are scans that carry no text until they are OCRed.
 """
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -30,10 +31,34 @@ def pages(pdf):
     return 0
 
 
+GSTIN_RE = re.compile(r"(\d{2}[A-Z]{5}\d{4}[A-Z]\d[A-Z\d]{2})")
+
+
+def case_key(folder, seen):
+    """A key that identifies one case, and cannot collide with another.
+
+    The GSTIN when the folder name carries one, which is the convention here.
+    Otherwise the folder name itself - not its first underscore-separated word,
+    which is what this used to take: two folders named SIGNED_Dormakaba_India
+    and SIGNED_Nexteer_Automotive both reduced to "SIGNED", and the second
+    silently replaced the first everywhere downstream.
+    """
+    m = GSTIN_RE.search(folder)
+    key = m.group(1) if m else folder
+    if key not in seen:
+        return key
+    n = 2
+    while f"{key}_{n}" in seen:
+        n += 1
+    return f"{key}_{n}"
+
+
 def main():
     cases = []
+    seen = set()
     for case in sorted(p for p in DATA.iterdir() if p.is_dir()):
-        gstin = case.name.split("_")[0]
+        gstin = case_key(case.name, seen)
+        seen.add(gstin)
         rec = {"gstin": gstin, "folder": case.name, "roles": {}}
         for role, dirs in role_dirs(case).items():
             files = []

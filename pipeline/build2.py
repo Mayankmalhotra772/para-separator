@@ -16,6 +16,7 @@ returned as rows are re-padded the same way.
 """
 
 import json
+import os
 import re
 import sys
 
@@ -38,9 +39,16 @@ THIN = Side(style="thin", color="BFC7D5")
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 TOP_WRAP = Alignment(vertical="top", wrap_text=True)
 
+# GST_NOTICE_ONLY builds the notice side alone, for a dataset that has no
+# replies and no orders - a folder of show cause notices on their own would
+# otherwise get two columns of "No reply" and "No finding" saying nothing.
+NOTICE_ONLY = os.environ.get("GST_NOTICE_ONLY", "").lower() not in ("", "0", "false", "no")
+
 COLS = [("GSTIN", 20), ("Trade name", 30),
         ("Notice (SCN) defect", 95), ("Taxpayer reply", 85),
         ("Officer finding", 80)]
+if NOTICE_ONLY:
+    COLS = COLS[:3]
 
 MAX_CELL = 30000        # Excel's own limit is 32767
 MAX_ROW_HEIGHT = 409    # Excel's own limit
@@ -143,8 +151,9 @@ def add_sheet(wb, pid, rows):
     ws.row_dimensions[2].height = 22
 
     for n, r in enumerate(rows):
-        ws.append([r["gstin"], safe(r["trade_name"]), safe(r["scn"]),
-                   safe(r["reply"]), safe(r["order"])])
+        row_values = [r["gstin"], safe(r["trade_name"]), safe(r["scn"]),
+                      safe(r["reply"]), safe(r["order"])]
+        ws.append(row_values[:len(COLS)])
         row = ws.max_row
         for i in range(1, len(COLS) + 1):
             cell = ws.cell(row=row, column=i)
@@ -198,6 +207,13 @@ def main():
     order = json.loads(opath.read_text()) if opath.exists() else {}
     fpath = WORK / "notice_fixed.json"
     fixed = json.loads(fpath.read_text()) if fpath.exists() else {}
+    # GST_SCN_GEN uses the rendered notice from scn_gen.py, which lays the
+    # department's tables out again instead of showing what pdftotext produced.
+    # It is model-written rather than sliced, which is why it is opt-in.
+    gpath = WORK / "scn_gen.json"
+    gen = (json.loads(gpath.read_text())
+           if gpath.exists() and os.environ.get("GST_SCN_GEN", "").lower()
+           not in ("", "0", "false", "no") else {})
 
     wb = Workbook()
     wb.remove(wb.active)
@@ -214,7 +230,9 @@ def main():
             finding = order_cell(orec)
             rows.append({"gstin": gstin,
                          "trade_name": scn[gstin]["trade_name"],
-                         "scn": notice_cell(sec, (fixed.get(gstin) or {}).get(pid)),
+                         "scn": (((gen.get(gstin, {}).get("params") or {})
+                                  .get(pid) or {}).get("text")
+                                 or notice_cell(sec, (fixed.get(gstin) or {}).get(pid))),
                          "reply": reply_cell(rec),
                          "order": finding})
         # A parameter no notice in this corpus raised still gets its sheet, so
